@@ -153,7 +153,7 @@ public partial class AiPage : UserControl
             if (plan.SevenDay is { } w) Row("Semana", $"{w.UsedPct:0}% · renova {w.ResetsAt.ToLocalTime():ddd HH:mm}", target: AgentRows);
         }
         Header("Sessões do Claude Code", AgentRows);
-        if (!HookInstaller.IsInstalled())
+        if (_hub.Sessions.Count == 0 && !HookInstaller.IsInstalled())
             Row("Ainda não conectado", "Configurações → Agentes", muted: true, target: AgentRows);
         else if (_hub.Sessions.Count == 0)
             Row("Nenhuma sessão agora", "abra o Claude Code no terminal", muted: true, target: AgentRows);
@@ -207,7 +207,7 @@ public partial class AiPage : UserControl
     void Row(string label, string value, bool muted = false, Panel? target = null)
     {
         var row = new DockPanel { Margin = new Thickness(0, 1, 0, 1) };
-        var v = new TextBlock { Text = value, FontSize = 12, Foreground = Brushes.LightGray };
+        var v = new TextBlock { Text = value, FontSize = 12, Foreground = Brushes.LightGray, Margin = new Thickness(12, 0, 0, 0) };
         DockPanel.SetDock(v, Dock.Right);
         row.Children.Add(v);
         row.Children.Add(new TextBlock { Text = label, FontSize = 12, Foreground = muted ? Brushes.Gray : Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis });

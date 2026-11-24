@@ -351,7 +351,7 @@ public partial class MainWindow : Window
         PermTitle.Text = $"{perm.Project}: o Claude pede permissão";
         PermDetail.Text = perm.Detail;
         PermAlways.Visibility = perm.Suggestions is System.Text.Json.Nodes.JsonArray { Count: > 0 } ? Visibility.Visible : Visibility.Collapsed;
-        PermQueue.Text = Agents.Pending.Count > 1 ? $"+{Agents.Pending.Count - 1} na fila" : "Sem resposta em ~2 min, ele pergunta no terminal";
+        PermQueue.Text = Agents.Pending.Count > 1 ? $"+{Agents.Pending.Count - 1} na fila" : "Sem resposta em 2 min, vai para o terminal";
         PermissionCard.Visibility = Visibility.Visible;
         if (!first) return;
         SystemSounds.Exclamation.Play();
