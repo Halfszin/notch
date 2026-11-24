@@ -122,7 +122,7 @@
                     CornerRadius="10" Padding="12,9" VerticalAlignment="Bottom">
                 <StackPanel Orientation="Horizontal">
                     <Ellipse Width="7" Height="7" Fill="#30D158" VerticalAlignment="Center"/>
-                    <TextBlock Text="Ativo · passe o mouse no notch" FontSize="12" Foreground="#AEAEB2" Margin="8,0,0,0"/>
+                    <TextBlock Text="Ativo · mouse no notch" FontSize="12" Foreground="#AEAEB2" Margin="8,0,0,0"/>
                 </StackPanel>
             </Border>
         </DockPanel>
