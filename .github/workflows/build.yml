@@ -81,10 +81,14 @@ jobs:
             [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
             [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h, int i);
             [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);
+            [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+            [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
             public static IntPtr Notch(uint pid) {
               IntPtr found = IntPtr.Zero;
               EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p);
-                if (p == pid && (GetWindowLong(h, -20) & 0x80) != 0) found = h; return true; }, IntPtr.Zero);
+                var t = new StringBuilder(64); GetWindowText(h, t, 64);
+                // A janela do notch: visível, título "Orbi" e estilo de ferramenta (o WPF cria outras invisíveis).
+                if (p == pid && IsWindowVisible(h) && t.ToString() == "Orbi" && (GetWindowLong(h, -20) & 0x80) != 0) found = h; return true; }, IntPtr.Zero);
               return found;
             }
           }
@@ -94,7 +98,7 @@ jobs:
           $lost = ([W]::GetWindowLong($h, -20) -band 8) -eq 0
           Start-Sleep 3
           $back = ([W]::GetWindowLong($h, -20) -band 8) -ne 0
-          "perdeu=$lost voltou=$back" | Out-File ci\topmost.txt
+          "janela=$h perdeu=$lost voltou=$back" | Out-File ci\topmost.txt
           if (-not $back) { "notch não voltou para cima" | Out-File ci\erros.log -Append }
           "vivo=$(-not $p.HasExited)" | Out-File ci\resultado.txt
           $log = "$env:APPDATA\Orbi\erros.log"
