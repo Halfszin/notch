@@ -19,7 +19,7 @@ namespace Orbi;
 
 public partial class MainWindow : Window
 {
-    const double FullW = 520, FullH = 232;
+    const double FullW = 544, FullH = 232;
     // Folga em volta do notch aberto para a animação com "mola" passar um pouco do tamanho final sem cortar.
     const double WinW = FullW + 24, WinH = FullH + 16;
     static readonly string EdgeFile = System.IO.Path.Combine(App.Dir, "edge.txt");
@@ -336,7 +336,9 @@ public partial class MainWindow : Window
             if (Agents.Pending.Count > 0) ShowPermission();
             else if (_event == "permission") HideEvent();
             int working = Agents.Sessions.Values.Count(x => x.Busy);
-            AgentsCount.Text = working == 1 ? "1 em andamento" : $"{working} em andamento";
+            // Compacto para caber ao lado das 9 abas; o texto completo fica na dica.
+            AgentsCount.Text = $"● {working}";
+            AgentsCount.ToolTip = working == 1 ? "1 agente em andamento" : $"{working} agentes em andamento";
             AgentsCount.Visibility = working > 0 ? Visibility.Visible : Visibility.Collapsed;
             UpdateBadge();
         };
