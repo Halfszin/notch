@@ -58,6 +58,7 @@ public partial class SystemPage : UserControl
     {
         ratio = Math.Clamp(ratio, 0, 1);
         g.Arc.Data = MainWindow.RingGeometry(ratio, Size / 2, Size / 2 - Thick / 2);
+        g.Arc.Visibility = ratio < 0.01 ? Visibility.Hidden : Visibility.Visible; // 0%: sem a bolinha da ponta arredondada
         g.Arc.Stroke = new SolidColorBrush(color);
         g.Value.Text = value;
         g.Detail.Text = detail;
