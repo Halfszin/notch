@@ -13,7 +13,7 @@ using System.Windows.Threading;
 using NAudio.CoreAudioApi;
 using Windows.Media.Control;
 
-namespace Notch;
+namespace Orbi;
 
 public partial class MainWindow : Window
 {

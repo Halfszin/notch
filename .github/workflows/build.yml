@@ -1,0 +1,78 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Versão
+        shell: pwsh
+        run: |
+          $v = (Select-Xml -Path Orbi.csproj -XPath '//Version').Node.InnerText
+          "ORBI_VERSION=$v" >> $env:GITHUB_ENV
+
+      - name: Publicar
+        run: dotnet publish Orbi.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+
+      - name: Teste rápido (abre o Orbi, passa o mouse no notch e tira prints)
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          New-Item -ItemType Directory ci -Force | Out-Null
+          function Shot($name) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save("ci\$name.png")
+          }
+          $p = Start-Process publish\Orbi.exe -PassThru
+          Start-Sleep 15
+          Shot "1-configuracoes"
+          $w = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($w / 2)), 8
+          Start-Sleep 3
+          Shot "2-notch-aberto"
+          "vivo=$(-not $p.HasExited)" | Out-File ci\resultado.txt
+          $log = "$env:APPDATA\Orbi\erros.log"
+          if (Test-Path $log) { Copy-Item $log ci\erros.log }
+          if (-not $p.HasExited) { Stop-Process $p -Force }
+
+      - name: Guardar o resultado do teste no branch ci-results
+        shell: bash
+        run: |
+          cd ci
+          git init -q -b ci-results && git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "teste ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-results
+
+      - name: Falhar se o Orbi fechou ou registrou erro
+        shell: pwsh
+        run: if ((Get-Content ci\resultado.txt) -ne 'vivo=True' -or (Test-Path ci\erros.log)) { exit 1 }
+
+      - name: Instalador
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc installer.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Publicar no Releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$ORBI_VERSION" dist/OrbiSetup.exe --title "Orbi $ORBI_VERSION" --notes "Baixe o OrbiSetup.exe e abra para instalar." \
+            || gh release upload "v$ORBI_VERSION" dist/OrbiSetup.exe --clobber

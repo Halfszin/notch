@@ -8,14 +8,14 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using Microsoft.Win32;
 
-namespace Notch;
+namespace Orbi;
 
 public partial class SettingsWindow : Window
 {
     public SettingsWindow()
     {
         InitializeComponent();
-        (App.Notch.Edge switch { "Left" => EdgeLeft, "Right" => EdgeRight, _ => EdgeTop }).IsChecked = true;
+        (App.OrbiWindow.Edge switch { "Left" => EdgeLeft, "Right" => EdgeRight, _ => EdgeTop }).IsChecked = true;
         StartupSwitch.IsChecked = App.StartsWithWindows;
         Banner.SizeChanged += (_, _) => DrawStars();
         BannerAvatar.Reloaded += ShowAvatarStatus;
@@ -45,7 +45,7 @@ public partial class SettingsWindow : Window
 
     void Edge_Checked(object s, RoutedEventArgs e)
     {
-        if (IsLoaded) App.Notch.SetEdge((string)((RadioButton)s).Tag);
+        if (IsLoaded) App.OrbiWindow.SetEdge((string)((RadioButton)s).Tag);
     }
 
     void Startup_Click(object s, RoutedEventArgs e)
@@ -83,7 +83,7 @@ public partial class SettingsWindow : Window
     async Task ReloadAvatars()
     {
         await BannerAvatar.Reload();
-        await App.Notch.Avatar.Reload();
+        await App.OrbiWindow.Avatar.Reload();
     }
 
     void ShowAvatarStatus()

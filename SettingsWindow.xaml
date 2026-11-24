@@ -1,8 +1,8 @@
-<Window x:Class="Notch.SettingsWindow"
+<Window x:Class="Orbi.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:local="clr-namespace:Notch"
-        Title="Notch" Width="900" Height="600" MinWidth="760" MinHeight="480"
+        xmlns:local="clr-namespace:Orbi"
+        Title="Orbi" Icon="orbi.ico" Width="900" Height="600" MinWidth="760" MinHeight="480"
         WindowStartupLocation="CenterScreen" Background="#0B0B0C"
         FontFamily="Segoe UI" Foreground="White">
     <Window.Resources>
@@ -108,7 +108,7 @@
                             <Ellipse Width="4" Height="6" Fill="Black" Margin="2,0"/>
                         </StackPanel>
                     </Border>
-                    <TextBlock Text="Notch" FontSize="18" FontWeight="Bold" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Orbi" FontSize="18" FontWeight="Bold" Margin="10,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
                 <TextBlock Text="NOTCH" Style="{StaticResource Label}" Margin="10,0,0,8"/>
                 <Border Background="#1C1C1F" CornerRadius="8" Padding="12,8">
@@ -191,7 +191,7 @@
                     <Border Style="{StaticResource Card}">
                         <Grid Style="{StaticResource Row}">
                             <StackPanel Margin="0,0,100,0">
-                                <TextBlock Text="Fechar o Notch" Style="{StaticResource RowTitle}"/>
+                                <TextBlock Text="Fechar o Orbi" Style="{StaticResource RowTitle}"/>
                                 <TextBlock Text="O notch some até você abrir o app de novo. Fechar esta janela não fecha o notch." Style="{StaticResource RowSub}"/>
                             </StackPanel>
                             <Button Content="Sair" Style="{StaticResource PillBtn}" HorizontalAlignment="Right" VerticalAlignment="Center" Click="Exit_Click"/>

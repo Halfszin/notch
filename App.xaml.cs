@@ -2,20 +2,24 @@ using System.IO;
 using System.Windows;
 using Microsoft.Win32;
 
-namespace Notch;
+namespace Orbi;
 
 public partial class App : Application
 {
     public static readonly string Dir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Notch");
-    public static MainWindow Notch = null!;
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Orbi");
+    public static MainWindow OrbiWindow = null!;
     static Mutex? _single;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         Directory.CreateDirectory(Dir);
-        _single = new Mutex(true, "Notch.SingleInstance", out bool first);
-        var showSettings = new EventWaitHandle(false, EventResetMode.AutoReset, "Notch.ShowSettings");
+        // Um erro inesperado vira aviso + linha em erros.log, em vez de fechar o app sem explicação.
+        DispatcherUnhandledException += (_, ev) => { ev.Handled = true; Report(ev.Exception); };
+        TaskScheduler.UnobservedTaskException += (_, ev) => { ev.SetObserved(); Log(ev.Exception); };
+        AppDomain.CurrentDomain.UnhandledException += (_, ev) => Log(ev.ExceptionObject);
+        _single = new Mutex(true, "Orbi.SingleInstance", out bool first);
+        var showSettings = new EventWaitHandle(false, EventResetMode.AutoReset, "Orbi.ShowSettings");
         if (!first)
         {
             // Já está rodando: abrir o app de novo só abre as configurações da instância que já existe.
@@ -24,10 +28,27 @@ public partial class App : Application
             return;
         }
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
-        Notch = new MainWindow();
-        Notch.Show();
+        OrbiWindow = new MainWindow();
+        OrbiWindow.Show();
         if (!e.Args.Contains("--startup")) OpenSettings();
         ThreadPool.RegisterWaitForSingleObject(showSettings, (_, _) => Dispatcher.Invoke(OpenSettings), null, -1, false);
+    }
+
+    public static string ErrorLog => Path.Combine(Dir, "erros.log");
+    static bool _reported;
+
+    static void Log(object error)
+    {
+        try { File.AppendAllText(ErrorLog, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {error}\n\n"); } catch { }
+    }
+
+    static void Report(Exception ex)
+    {
+        Log(ex);
+        if (_reported) return; // um aviso só, para não virar uma cascata de janelas
+        _reported = true;
+        MessageBox.Show($"O Orbi encontrou um erro e continuou aberto.\n\n{ex.Message}\n\nDetalhes em:\n{ErrorLog}",
+            "Orbi", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
     public static void OpenSettings()
@@ -43,12 +64,12 @@ public partial class App : Application
 
     public static bool StartsWithWindows
     {
-        get => Registry.CurrentUser.OpenSubKey(RunKey)?.GetValue("Notch") != null;
+        get => Registry.CurrentUser.OpenSubKey(RunKey)?.GetValue("Orbi") != null;
         set
         {
             using var k = Registry.CurrentUser.CreateSubKey(RunKey);
-            if (value) k.SetValue("Notch", $"\"{Environment.ProcessPath}\" --startup");
-            else k.DeleteValue("Notch", false);
+            if (value) k.SetValue("Orbi", $"\"{Environment.ProcessPath}\" --startup");
+            else k.DeleteValue("Orbi", false);
         }
     }
 }

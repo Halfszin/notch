@@ -6,14 +6,17 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>Notch</AssemblyName>
-    <DefaultItemExcludes>$(DefaultItemExcludes);web/node_modules/**;download/**</DefaultItemExcludes>
+    <AssemblyName>Orbi</AssemblyName>
+    <Version>1.0.0</Version>
+    <ApplicationIcon>orbi.ico</ApplicationIcon>
+    <DefaultItemExcludes>$(DefaultItemExcludes);web/node_modules/**;publish/**;dist/**;ci/**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3537.50" />
   </ItemGroup>
   <ItemGroup>
+    <Resource Include="orbi.ico" />
     <!-- Renderizador do avatar (@bible-strong/avatar-web). Gerar de novo: cd web && npm install && npm run build -->
     <EmbeddedResource Include="web/avatar.bundle.js" LogicalName="avatar.bundle.js" />
     <EmbeddedResource Include="web/new-avatar.avatar.json" LogicalName="default.avatar.json" />

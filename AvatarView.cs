@@ -5,7 +5,7 @@ using System.Windows.Controls;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 
-namespace Notch;
+namespace Orbi;
 
 // Mostra o avatar do Avatar Lab (@bible-strong/avatar-web) dentro de um WebView2 transparente.
 public class AvatarView : ContentControl
@@ -56,8 +56,12 @@ public class AvatarView : ContentControl
         try { json = File.Exists(AvatarFile) ? File.ReadAllText(AvatarFile) : Resource("default.avatar.json"); }
         catch { json = Resource("default.avatar.json"); }
         // Passa como texto e o JSON.parse faz a leitura: o conteúdo do arquivo nunca roda como código.
-        var r = await _web.ExecuteScriptAsync($"load({JsonSerializer.Serialize(json)},{JsonSerializer.Serialize(_state)})");
-        LastResult = JsonSerializer.Deserialize<string>(r) ?? "none";
+        try
+        {
+            var r = await _web.ExecuteScriptAsync($"load({JsonSerializer.Serialize(json)},{JsonSerializer.Serialize(_state)})");
+            LastResult = JsonSerializer.Deserialize<string>(r) ?? "none";
+        }
+        catch (Exception ex) { LastResult = ex.Message; }
         Visibility = LastResult == "ok" ? Visibility.Visible : Visibility.Collapsed;
         Reloaded?.Invoke();
     }

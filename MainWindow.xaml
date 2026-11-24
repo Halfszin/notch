@@ -1,8 +1,8 @@
-<Window x:Class="Notch.MainWindow"
+<Window x:Class="Orbi.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:local="clr-namespace:Notch"
-        Title="Notch" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        xmlns:local="clr-namespace:Orbi"
+        Title="Orbi" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize"
         FontFamily="Segoe UI" Foreground="White">
     <Window.Resources>
