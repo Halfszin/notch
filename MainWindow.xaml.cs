@@ -437,8 +437,9 @@ public partial class MainWindow : Window
     }
 
     // Arco no sentido horário a partir do topo, centro (9,9), raio 7.5 (anel de 18px).
-    // c = centro, r = raio. Padrão: anel de 18px do notch. A aba Sistema usa anéis maiores.
-    internal static Geometry RingGeometry(double pct, double c = 9, double r = 7.5)
+    // c = centro, r = raio do meio do traço. Padrão: anel de 18px com traço 2.5 (9 - 2.5/2 = 7.75), alinhado
+    // ao trilho cinza, que o Windows desenha por dentro da caixa. A aba Sistema usa anéis maiores.
+    internal static Geometry RingGeometry(double pct, double c = 9, double r = 7.75)
     {
         if (pct >= 0.999) return new EllipseGeometry(new Point(c, c), r, r);
         double a = pct * 2 * Math.PI;
