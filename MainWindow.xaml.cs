@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Media;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -17,7 +18,7 @@ namespace Orbi;
 
 public partial class MainWindow : Window
 {
-    const double FullW = 420, FullH = 200;
+    const double FullW = 440, FullH = 226;
     // Folga em volta do notch aberto para a animação com "mola" passar um pouco do tamanho final sem cortar.
     const double WinW = FullW + 24, WinH = FullH + 16;
     static readonly string EdgeFile = System.IO.Path.Combine(App.Dir, "edge.txt");
@@ -25,13 +26,18 @@ public partial class MainWindow : Window
     static readonly Brush Green = new SolidColorBrush(Color.FromRgb(0x30, 0xD1, 0x58));
     static readonly Brush Red = new SolidColorBrush(Color.FromRgb(0xFF, 0x45, 0x3A));
 
-    bool _open, _syncingVolume;
+    bool _open, _syncingVolume, _playing;
     string? _coverKey;
     GlobalSystemMediaTransportControlsSessionManager? _media;
     GlobalSystemMediaTransportControlsSession? _session;
     MMDevice? _audioDevice;
     readonly List<SimpleAudioVolume> _spotifyVolumes = new();
+    readonly List<AudioMeterInformation> _spotifyMeters = new();
+    readonly Dictionary<uint, bool> _spotifyPids = new();
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
+    readonly DispatcherTimer _beat = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
+    readonly DispatcherTimer _autoClose = new() { Interval = TimeSpan.FromSeconds(7) };
+    double _level;
 
     public string Edge { get; private set; } = "Top";
 
@@ -42,6 +48,11 @@ public partial class MainWindow : Window
         try { edge = File.ReadAllText(EdgeFile).Trim(); } catch { }
         SetEdge(edge, save: false);
         _timer.Tick += async (_, _) => await Tick();
+        _beat.Tick += (_, _) => Beat();
+        _autoClose.Tick += (_, _) => { _autoClose.Stop(); if (!Pill.IsMouseOver) Resize(false); };
+        CalendarView.Finished += TimerFinished;
+        Updater.Changed += () => Dispatcher.Invoke(() =>
+            UpdateDot.Visibility = Updater.ReadyFile != null ? Visibility.Visible : Visibility.Collapsed);
         Loaded += async (_, _) =>
         {
             try { _media = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync(); } catch { }
@@ -71,11 +82,11 @@ public partial class MainWindow : Window
         Width = WinW;
         Height = WinH;
         Mini.Orientation = Edge == "Top" ? Orientation.Horizontal : Orientation.Vertical;
-        (Left, Top, Pill.HorizontalAlignment, Pill.VerticalAlignment, Pill.CornerRadius) = Edge switch
+        (Left, Top, Pill.HorizontalAlignment, Pill.VerticalAlignment, Pill.CornerRadius, Pill.RenderTransformOrigin) = Edge switch
         {
-            "Left" => (0.0, (sh - WinH) / 2, HorizontalAlignment.Left, VerticalAlignment.Center, new CornerRadius(0, 20, 20, 0)),
-            "Right" => (sw - WinW, (sh - WinH) / 2, HorizontalAlignment.Right, VerticalAlignment.Center, new CornerRadius(20, 0, 0, 20)),
-            _ => ((sw - WinW) / 2, 0.0, HorizontalAlignment.Center, VerticalAlignment.Top, new CornerRadius(0, 0, 20, 20)),
+            "Left" => (0.0, (sh - WinH) / 2, HorizontalAlignment.Left, VerticalAlignment.Center, new CornerRadius(0, 20, 20, 0), new Point(0, 0.5)),
+            "Right" => (sw - WinW, (sh - WinH) / 2, HorizontalAlignment.Right, VerticalAlignment.Center, new CornerRadius(20, 0, 0, 20), new Point(1, 0.5)),
+            _ => ((sw - WinW) / 2, 0.0, HorizontalAlignment.Center, VerticalAlignment.Top, new CornerRadius(0, 0, 20, 20), new Point(0.5, 0)),
         };
         Resize(false, animate: false);
     }
@@ -107,13 +118,19 @@ public partial class MainWindow : Window
 
     void Pill_MouseEnter(object s, MouseEventArgs e)
     {
+        _autoClose.Stop();
         if (_open) return;
+        bool wasAsleep = DateTime.Now - _lastSeen > SleepAfter;
+        _lastSeen = DateTime.Now;
         Resize(true);
+        if (wasAsleep) React("waking", 2.5);
+        else Avatar.Poke("nod");
         _ = UpdateMedia();
     }
 
     void Pill_MouseLeave(object s, MouseEventArgs e)
     {
+        _lastSeen = DateTime.Now;
         if (!Pill.ContextMenu.IsOpen && !VolSlider.IsMouseCaptureWithin) Resize(false);
     }
 
@@ -122,18 +139,80 @@ public partial class MainWindow : Window
         if (!Pill.IsMouseOver) Resize(false);
     }
 
+    void Tab_Checked(object s, RoutedEventArgs e)
+    {
+        if (CalendarView == null) return; // o XAML marca "Início" antes de criar as páginas
+        bool calendar = (string)((RadioButton)s).Tag == "calendar";
+        CalendarView.Visibility = calendar ? Visibility.Visible : Visibility.Collapsed;
+        HomePage.Visibility = calendar ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     void Settings_Click(object s, RoutedEventArgs e) => App.OpenSettings();
     void Exit_Click(object s, RoutedEventArgs e) => Application.Current.Shutdown();
+
+    // ---------- humor do avatar ----------
+    // Estado de fundo (música, bateria, sono) + reações curtas que passam por cima por alguns segundos.
+
+    static readonly TimeSpan SleepAfter = TimeSpan.FromMinutes(5);
+    DateTime _lastSeen = DateTime.Now, _reactionUntil;
+    string? _reaction;
+    readonly Queue<DateTime> _clicks = new();
+    bool? _wasCharging;
+
+    void React(string state, double seconds)
+    {
+        _reaction = state;
+        _reactionUntil = DateTime.Now.AddSeconds(seconds);
+        ApplyMood();
+    }
+
+    void ApplyMood()
+    {
+        if (_reaction != null && DateTime.Now < _reactionUntil) { Avatar.SetState(_reaction); return; }
+        _reaction = null;
+        GetSystemPowerStatus(out var p);
+        bool lowBattery = p.Percent <= 15 && p.AC != 1;
+        Avatar.SetState(
+            _playing ? "humming" :
+            lowBattery ? "drowsy" :
+            !_open && DateTime.Now - _lastSeen > SleepAfter ? "sleeping" :
+            "idle");
+    }
+
+    // Cutucar: 1-2 cliques = feliz, vários seguidos = surpreso, muitos = confuso, exagero = bravo.
+    void Avatar_Click(object s, RoutedEventArgs e)
+    {
+        var now = DateTime.Now;
+        _clicks.Enqueue(now);
+        while (_clicks.Peek() < now.AddSeconds(-3)) _clicks.Dequeue();
+        int n = _clicks.Count;
+        if (n >= 12) React("angry", 4);
+        else if (n >= 7) React("confused", 6);
+        else if (n >= 4) { React("surprised", 2); Avatar.Poke("spin"); }
+        else { React("happy", 2); Avatar.Poke("bounce"); }
+    }
+
+    void TimerFinished()
+    {
+        SystemSounds.Asterisk.Play();
+        Resize(true);
+        React("celebrate", 6);
+        _autoClose.Start();
+    }
 
     // ---------- relógio + bateria ----------
 
     async Task Tick()
     {
         var now = DateTime.Now;
-        ClockMini.Text = ClockFull.Text = now.ToString("HH:mm");
+        ClockFull.Text = now.ToString("HH:mm");
+        // Com o timer correndo, o notch fechado mostra o tempo que falta no lugar da hora.
+        ClockMini.Text = CalendarView.RunningText ?? ClockFull.Text;
         DateText.Text = now.ToString("ddd dd MMM yyyy", PtBr).Replace(".", "");
+        CalendarView.Refresh();
         UpdateBattery();
-        if (_open) await UpdateMedia();
+        await UpdateMedia();
+        ApplyMood();
     }
 
     void UpdateBattery()
@@ -147,6 +226,9 @@ public partial class MainWindow : Window
         RingMini.Stroke = RingFull.Stroke = BoltMini.Foreground = BoltFull.Foreground = brush;
         BoltMini.Visibility = BoltFull.Visibility = charging ? Visibility.Visible : Visibility.Collapsed;
         BatteryText.Text = none ? "" : $"{p.Percent}%";
+        // Ligou o carregador: fica animado. Tirou: leva um susto.
+        if (!none && _wasCharging is bool was && was != charging) React(charging ? "excited" : "surprised", 3);
+        if (!none) _wasCharging = charging;
     }
 
     // Arco no sentido horário a partir do topo, centro (9,9), raio 7.5 (anel de 18px).
@@ -174,23 +256,28 @@ public partial class MainWindow : Window
 
             var props = await _session.TryGetMediaPropertiesAsync();
             var tl = _session.GetTimelineProperties();
-            bool playing = _session.GetPlaybackInfo().PlaybackStatus ==
-                GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+            SetPlaying(_session.GetPlaybackInfo().PlaybackStatus ==
+                GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing);
 
             TitleText.Text = string.IsNullOrEmpty(props.Title) ? "Nada tocando" : props.Title;
             ArtistText.Text = props.Artist;
-            PlayBtn.Content = playing ? "" : "";
-            Avatar.SetState(playing ? "humming" : "idle");
+            PlayBtn.Content = _playing ? "" : "";
 
             var len = tl.EndTime - tl.StartTime;
-            var pos = tl.Position + (playing ? DateTimeOffset.Now - tl.LastUpdatedTime : TimeSpan.Zero);
+            var pos = tl.Position + (_playing ? DateTimeOffset.Now - tl.LastUpdatedTime : TimeSpan.Zero);
             double ratio = len > TimeSpan.Zero ? Math.Clamp(pos / len, 0, 1) : 0;
             Elapsed.Text = Fmt(len * ratio);
             Remaining.Text = "-" + Fmt(len * (1 - ratio));
             ProgressFill.Width = ProgressTrack.ActualWidth * ratio;
 
             string key = props.Title + "|" + props.Artist;
-            if (key != _coverKey) { _coverKey = key; await LoadCover(props.Thumbnail); }
+            if (key != _coverKey)
+            {
+                // Música nova (não a primeira leitura): o avatar se anima.
+                if (_coverKey != null && _playing) React("excited", 2.5);
+                _coverKey = key;
+                await LoadCover(props.Thumbnail);
+            }
         }
         catch { ShowNothing(); }
     }
@@ -207,7 +294,7 @@ public partial class MainWindow : Window
         PlayBtn.Content = "";
         CoverBox.Background = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x22));
         CoverIcon.Visibility = Visibility.Visible;
-        Avatar.SetState("idle");
+        SetPlaying(false);
         _coverKey = null;
     }
 
@@ -246,6 +333,52 @@ public partial class MainWindow : Window
         catch { }
     }
 
+    // ---------- reagir à música ----------
+    // ~30 vezes por segundo, enquanto toca: lê o nível do som do Spotify e faz o avatar, o brilho
+    // e o notch fechado pulsarem com ele.
+
+    void SetPlaying(bool playing)
+    {
+        if (playing == _playing) return;
+        _playing = playing;
+        Bars.Visibility = playing ? Visibility.Visible : Visibility.Collapsed;
+        if (playing) _beat.Start();
+        else
+        {
+            _beat.Stop();
+            _level = 0;
+            ApplyLevel(0);
+        }
+    }
+
+    void Beat()
+    {
+        float peak = 0;
+        try
+        {
+            peak = _spotifyMeters.Count > 0
+                ? _spotifyMeters.Max(m => m.MasterPeakValue)
+                : _audioDevice?.AudioMeterInformation.MasterPeakValue ?? 0;
+        }
+        catch { }
+        // Sobe na hora, desce devagar: pulsa na batida sem tremer.
+        _level = Math.Max(peak, _level * 0.82);
+        ApplyLevel(_level);
+    }
+
+    void ApplyLevel(double level)
+    {
+        double t = Environment.TickCount64 / 1000.0;
+        AvatarScale.ScaleX = AvatarScale.ScaleY = 1 + 0.10 * level;
+        GlowScale.ScaleX = GlowScale.ScaleY = 1 + 0.30 * level;
+        Glow.Opacity = 0.55 + 0.45 * level;
+        // Notch fechado "respira" com a música; aberto fica parado para não atrapalhar os botões.
+        PillScale.ScaleX = PillScale.ScaleY = _open ? 1 : 1 + 0.05 * level;
+        Bar1.Height = 3 + 11 * level * (0.65 + 0.35 * Math.Sin(t * 9));
+        Bar2.Height = 3 + 11 * level;
+        Bar3.Height = 3 + 11 * level * (0.65 + 0.35 * Math.Sin(t * 7 + 1.7));
+    }
+
     // ---------- volume ----------
     // As sessões de áudio do Spotify são procuradas só a cada segundo (no Tick). Arrastar a barra
     // apenas grava o valor nelas, sem varrer processos a cada movimento (era isso que travava).
@@ -254,17 +387,26 @@ public partial class MainWindow : Window
     {
         _audioDevice?.Dispose();
         _spotifyVolumes.Clear();
+        _spotifyMeters.Clear();
         using var en = new MMDeviceEnumerator();
         _audioDevice = en.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         var sessions = _audioDevice.AudioSessionManager.Sessions;
         for (int i = 0; i < sessions.Count; i++)
-            if (IsSpotify(sessions[i].GetProcessID)) _spotifyVolumes.Add(sessions[i].SimpleAudioVolume);
+        {
+            if (!IsSpotify(sessions[i].GetProcessID)) continue;
+            _spotifyVolumes.Add(sessions[i].SimpleAudioVolume);
+            _spotifyMeters.Add(sessions[i].AudioMeterInformation);
+        }
     }
 
-    static bool IsSpotify(uint pid)
+    bool IsSpotify(uint pid)
     {
-        try { return Process.GetProcessById((int)pid).ProcessName.Equals("Spotify", StringComparison.OrdinalIgnoreCase); }
-        catch { return false; }
+        if (_spotifyPids.TryGetValue(pid, out bool known)) return known;
+        bool spotify;
+        try { spotify = Process.GetProcessById((int)pid).ProcessName.Equals("Spotify", StringComparison.OrdinalIgnoreCase); }
+        catch { spotify = false; }
+        if (_spotifyPids.Count > 500) _spotifyPids.Clear(); // PIDs são reaproveitados pelo Windows; não deixa crescer para sempre
+        return _spotifyPids[pid] = spotify;
     }
 
     void UpdateVolumeSlider()

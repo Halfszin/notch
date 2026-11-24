@@ -187,6 +187,28 @@
                         </Grid>
                     </Border>
 
+                    <TextBlock Text="ATUALIZAÇÕES" Style="{StaticResource Label}"/>
+                    <Border Style="{StaticResource Card}">
+                        <Grid Style="{StaticResource Row}">
+                            <StackPanel Margin="0,0,300,0">
+                                <TextBlock x:Name="VersionText" Style="{StaticResource RowTitle}"/>
+                                <TextBlock x:Name="UpdateStatus" Style="{StaticResource RowSub}"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Button Content="Verificar agora" Style="{StaticResource PillBtn}" Click="CheckUpdate_Click"/>
+                                <Button x:Name="InstallBtn" Content="Reiniciar e atualizar" Margin="8,0,0,0" Click="InstallUpdate_Click" Visibility="Collapsed">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="#30D158" CornerRadius="8" Padding="14,6">
+                                                <TextBlock Text="{TemplateBinding Content}" Foreground="Black" FontWeight="SemiBold" FontSize="13"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
                     <TextBlock Text="APP" Style="{StaticResource Label}"/>
                     <Border Style="{StaticResource Card}">
                         <Grid Style="{StaticResource Row}">

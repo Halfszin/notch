@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Orbi</AssemblyName>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <ApplicationIcon>orbi.ico</ApplicationIcon>
     <DefaultItemExcludes>$(DefaultItemExcludes);web/node_modules/**;publish/**;dist/**;ci/**</DefaultItemExcludes>
   </PropertyGroup>

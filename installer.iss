@@ -36,7 +36,8 @@ Name: "{autodesktop}\Orbi"; Filename: "{app}\Orbi.exe"; Tasks: desktopicon
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "Orbi"; Flags: uninsdeletevalue
 
 [Run]
-Filename: "{app}\Orbi.exe"; Description: "Abrir o Orbi"; Flags: nowait postinstall skipifsilent
+; Sem "skipifsilent": na atualização automática (instalação silenciosa) o Orbi abre de novo sozinho.
+Filename: "{app}\Orbi.exe"; Description: "Abrir o Orbi"; Flags: nowait postinstall
 
 [UninstallRun]
 Filename: "taskkill"; Parameters: "/im Orbi.exe /f"; Flags: runhidden; RunOnceId: "FecharOrbi"

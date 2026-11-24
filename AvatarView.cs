@@ -73,6 +73,9 @@ public class AvatarView : ContentControl
         Run($"av&&av.setState({JsonSerializer.Serialize(state)})");
     }
 
+    /// <summary>Gesto por cima do que está tocando: "nod", "bounce" ou "spin".</summary>
+    public void Poke(string gesture) => Run($"av&&av.poke({JsonSerializer.Serialize(gesture)})");
+
     public void Pause() => Run("av&&av.pause()");
     public void Resume() => Run("av&&av.resume()");
 

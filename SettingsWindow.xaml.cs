@@ -20,7 +20,20 @@ public partial class SettingsWindow : Window
         Banner.SizeChanged += (_, _) => DrawStars();
         BannerAvatar.Reloaded += ShowAvatarStatus;
         ShowAvatarStatus();
+        VersionText.Text = $"Orbi {Updater.Current}";
+        Updater.Changed += ShowUpdate;
+        Closed += (_, _) => Updater.Changed -= ShowUpdate;
+        ShowUpdate();
     }
+
+    void ShowUpdate() => Dispatcher.Invoke(() =>
+    {
+        UpdateStatus.Text = Updater.Status;
+        InstallBtn.Visibility = Updater.ReadyFile != null ? Visibility.Visible : Visibility.Collapsed;
+    });
+
+    async void CheckUpdate_Click(object s, RoutedEventArgs e) => await Updater.Check();
+    void InstallUpdate_Click(object s, RoutedEventArgs e) => Updater.Install();
 
     protected override void OnSourceInitialized(EventArgs e)
     {

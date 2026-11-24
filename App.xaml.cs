@@ -31,6 +31,7 @@ public partial class App : Application
         OrbiWindow = new MainWindow();
         OrbiWindow.Show();
         if (!e.Args.Contains("--startup")) OpenSettings();
+        Updater.Start();
         ThreadPool.RegisterWaitForSingleObject(showSettings, (_, _) => Dispatcher.Invoke(OpenSettings), null, -1, false);
     }
 
