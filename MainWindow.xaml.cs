@@ -19,7 +19,7 @@ namespace Orbi;
 
 public partial class MainWindow : Window
 {
-    const double FullW = 440, FullH = 264;
+    const double FullW = 520, FullH = 232;
     // Folga em volta do notch aberto para a animação com "mola" passar um pouco do tamanho final sem cortar.
     const double WinW = FullW + 24, WinH = FullH + 16;
     static readonly string EdgeFile = System.IO.Path.Combine(App.Dir, "edge.txt");

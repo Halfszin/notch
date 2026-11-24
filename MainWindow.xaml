@@ -179,16 +179,39 @@
             </StackPanel>
 
             <!-- Aberto -->
-            <Grid x:Name="Full" Width="440" Height="264" Opacity="0" IsHitTestVisible="False">
-                <Grid Margin="14,6,14,8">
+            <Grid x:Name="Full" Width="520" Height="232" Opacity="0" IsHitTestVisible="False">
+                <Grid Margin="14,6,14,14">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="34"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Barra de navegação embaixo -->
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,6,0,0">
+
+
+                    <DockPanel>
+                        <Grid DockPanel.Dock="Right">
+                            <Button Style="{StaticResource IconBtn}" Content="&#xE713;"
+                                    ToolTip="Configurações" AutomationProperties.Name="Configurações" Click="Settings_Click"/>
+                            <Ellipse x:Name="UpdateDot" Width="7" Height="7" Fill="#30D158" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                     Margin="0,4,6,0" IsHitTestVisible="False" Visibility="Collapsed" ToolTip="Versão nova pronta"/>
+                        </Grid>
+                        <TextBlock x:Name="AgentsCount" DockPanel.Dock="Right" FontSize="12" Foreground="#8E8E93" VerticalAlignment="Center" Margin="0,0,10,0" Visibility="Collapsed"/>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0">
+                            <TextBlock x:Name="WeatherText" FontSize="12" Margin="0,0,12,0" VerticalAlignment="Center" Visibility="Collapsed"
+                                       FontFamily="Segoe UI Symbol, Segoe UI"/>
+                            <Grid Width="18" Height="18" Margin="0,0,5,0">
+                                <Ellipse Stroke="#2E2E31" StrokeThickness="2.5"/>
+                                <Path x:Name="RingFull" StrokeThickness="2.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                <Path x:Name="BoltFull" Data="M6,0 L0,6.2 H3.8 L2.8,11 L9,4.6 H5.2 Z" Width="6.5" Height="8" Stretch="Uniform"
+ HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                            </Grid>
+                            <TextBlock x:Name="BatteryText" FontSize="12" Foreground="#AAA" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="DateText" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center" Visibility="Collapsed"/>
+                            <TextBlock x:Name="ClockFull" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <!-- Abas em cima, como no coucou -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
                         <RadioButton x:Name="TabHome" Style="{StaticResource Tab}" Content="&#xE80F;" Tag="home" IsChecked="True" Checked="Tab_Checked"
                                      ToolTip="Início" AutomationProperties.Name="Início" Margin="1,0"/>
                         <RadioButton Style="{StaticResource Tab}" Content="&#xE787;" Tag="calendar" Checked="Tab_Checked"
@@ -208,28 +231,6 @@
                         <RadioButton Style="{StaticResource Tab}" Content="&#xE99A;" Tag="ai" Checked="Tab_Checked"
                                      ToolTip="Inteligência artificial" AutomationProperties.Name="IA" Margin="1,0"/>
                     </StackPanel>
-
-                    <DockPanel>
-                        <Grid DockPanel.Dock="Right">
-                            <Button Style="{StaticResource IconBtn}" Content="&#xE713;"
-                                    ToolTip="Configurações" AutomationProperties.Name="Configurações" Click="Settings_Click"/>
-                            <Ellipse x:Name="UpdateDot" Width="7" Height="7" Fill="#30D158" HorizontalAlignment="Right" VerticalAlignment="Top"
-                                     Margin="0,4,6,0" IsHitTestVisible="False" Visibility="Collapsed" ToolTip="Versão nova pronta"/>
-                        </Grid>
-                        <TextBlock x:Name="AgentsCount" DockPanel.Dock="Right" FontSize="12" Foreground="#8E8E93" VerticalAlignment="Center" Margin="0,0,10,0" Visibility="Collapsed"/>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="8,0,0,0">
-                            <TextBlock x:Name="WeatherText" FontSize="12" Margin="0,0,12,0" VerticalAlignment="Center" Visibility="Collapsed"
-                                       FontFamily="Segoe UI Symbol, Segoe UI"/>
-                            <Grid Width="18" Height="18" Margin="0,0,5,0">
-                                <Ellipse Stroke="#2E2E31" StrokeThickness="2.5"/>
-                                <Path x:Name="RingFull" StrokeThickness="2.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                <Path x:Name="BoltFull" Data="M6,0 L0,6.2 H3.8 L2.8,11 L9,4.6 H5.2 Z" Width="6.5" Height="8" Stretch="Uniform"
- HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
-                            </Grid>
-                            <TextBlock x:Name="BatteryText" FontSize="12" Foreground="#AAA" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="DateText" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="ClockFull" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
-                        </StackPanel>
                     </DockPanel>
 
                     <Border Grid.Row="1" Background="#161619" CornerRadius="24" Padding="10,10,14,10" ClipToBounds="True">
@@ -278,7 +279,7 @@
                                         </Ellipse.Fill>
                                     </Ellipse>
                                     <Border x:Name="AvatarBadge" Width="22" Height="22" CornerRadius="11" HorizontalAlignment="Left" VerticalAlignment="Top"
-                                            Margin="4,14,0,0" Panel.ZIndex="2" Visibility="Collapsed" BorderBrush="#161619" BorderThickness="2" IsHitTestVisible="False">
+                                            Margin="16,20,0,0" Panel.ZIndex="2" Visibility="Collapsed" BorderBrush="#161619" BorderThickness="2" IsHitTestVisible="False">
                                         <TextBlock x:Name="AvatarBadgeText" FontSize="11" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                     <local:AvatarView x:Name="Avatar" Width="104" Height="104" RenderTransformOrigin="0.5,0.5">

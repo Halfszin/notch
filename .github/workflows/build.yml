@@ -90,6 +90,9 @@ jobs:
             $answer = Receive-Job $job -Wait -AutoRemoveJob
             "$answer" | Out-File ci\permissao.txt
             if ("$answer" -notmatch '"behavior":"allow"') { "permissão não voltou como allow: $answer" | Out-File ci\erros.log -Append }
+            # Ao chegar a permissão o notch volta para Início (como no coucou): reabre a aba IA.
+            (Find "IA").GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+            Start-Sleep 1
             (Find "Agentes").GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
             Start-Sleep 1
             Shot "14-agentes"
