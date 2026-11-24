@@ -43,7 +43,7 @@ jobs:
           # Dados de exemplo: cidade (clima), atalhos e uma tarefa que vence durante o teste (lembrete).
           $dir = "$env:APPDATA\Orbi"
           New-Item -ItemType Directory $dir -Force | Out-Null
-          '{"City":"São Paulo, São Paulo, Brasil","Latitude":-23.55,"Longitude":-46.63,"AppNotifications":true}' | Set-Content "$dir\config.json" -Encoding utf8
+          '{"City":"São Paulo, São Paulo, Brasil","Latitude":-23.55,"Longitude":-46.63,"AppNotifications":true,"AgentPort":47821,"AgentToken":"citoken"}' | Set-Content "$dir\config.json" -Encoding utf8
           '[{"Name":"Bloco de notas","Target":"C:\\Windows\\System32\\notepad.exe"},{"Name":"github.com","Target":"https://github.com/"}]' | Set-Content "$dir\atalhos.json" -Encoding utf8
           $due = (Get-Date).AddSeconds(12).ToString("s")
           "[{""Title"":""Lembrete do teste do CI"",""Due"":""$due"",""Done"":false,""Notified"":false},{""Title"":""Comprar pão"",""Due"":null,""Done"":false,""Notified"":false}]" | Set-Content "$dir\tarefas.json" -Encoding utf8
@@ -81,6 +81,18 @@ jobs:
             Tab "Tarefas" "10-tarefas"
             Tab "Atalhos" "11-atalhos"
             Tab "IA" "12-ia"
+            # Simula o Claude Code: um evento e um pedido de permissão que o robô aprova pelo notch.
+            '{"session_id":"ci","cwd":"C:/projetos/loja","tool_name":"Edit","tool_input":{"file_path":"C:/projetos/loja/app.ts"}}' | curl.exe -s -m 5 --data-binary "@-" "http://127.0.0.1:47821/citoken/PreToolUse" | Out-Null
+            $job = Start-Job { '{"session_id":"ci","cwd":"C:/projetos/loja","tool_name":"Bash","tool_input":{"command":"npm test"},"permission_suggestions":[{"type":"addRules"}]}' | curl.exe -s -m 60 --data-binary "@-" "http://127.0.0.1:47821/citoken/PermissionRequest" }
+            Start-Sleep 4
+            Shot "13-permissao"
+            (Find "Permitir").GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+            $answer = Receive-Job $job -Wait -AutoRemoveJob
+            "$answer" | Out-File ci\permissao.txt
+            if ("$answer" -notmatch '"behavior":"allow"') { "permissão não voltou como allow: $answer" | Out-File ci\erros.log -Append }
+            (Find "Agentes").GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+            Start-Sleep 1
+            Shot "14-agentes"
           } catch { "UIA: $_" | Out-File ci\uia.txt }
           # Bug do Alt+Tab: tira o "sempre por cima" do notch e confere se ele volta sozinho.
           Add-Type @"

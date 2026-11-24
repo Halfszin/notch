@@ -18,6 +18,9 @@ public sealed class Config
     public double? Longitude { get; set; }
     public bool AppNotifications { get; set; } = true;
     public string? ApiKeyProtected { get; set; }
+    public int AgentPort { get; set; } = 47821;
+    // Código secreto que vai no endereço dos hooks: sem ele o Orbi recusa o evento.
+    public string AgentToken { get; set; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
 
     [JsonIgnore]
     public string? ApiKey

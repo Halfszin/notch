@@ -53,6 +53,9 @@ public partial class MainWindow : Window
     readonly AudioWatcher _audioWatcher = new();
     int _lowWarnAt = 20;
     readonly NotificationWatcher _notifications = new();
+    public readonly AgentHub Agents = new();
+    public AgentServer? AgentServer { get; private set; }
+    readonly DispatcherTimer _look = new() { Interval = TimeSpan.FromMilliseconds(80) };
     DateTime _weatherAt = DateTime.MinValue;
     int _tickCount;
 
@@ -84,6 +87,10 @@ public partial class MainWindow : Window
                 if (el is TextBox) { AllowKeyboard(true); return; }
         };
         AiView.Thinking += on => { if (on) React("thinking", 120); else React("happy", 2); };
+        StartAgents();
+        AiView.Hub = Agents;
+        // Olhos do avatar seguem o mouse enquanto o notch está aberto.
+        _look.Tick += (_, _) => LookAtCursor();
         _notifications.Received += (app, title, body) =>
         {
             var color = new SolidColorBrush(app == "WhatsApp" ? Color.FromRgb(0x25, 0xD3, 0x66) : Color.FromRgb(0x58, 0x65, 0xF2));
@@ -286,7 +293,8 @@ public partial class MainWindow : Window
         Fade(ToastPanel, toast ? 1 : 0, animate ? 160 : 0, toast && animate ? 120 : 0);
         if (!open) AllowKeyboard(false);
         Full.IsHitTestVisible = open;
-        if (open) Avatar.Resume(); else Avatar.Pause();
+        if (open) { Avatar.Resume(); _look.Start(); }
+        else { Avatar.Pause(); _look.Stop(); Avatar.LookAt(null, null); }
     }
 
     static void Fade(UIElement el, double to, double ms, double delayMs) =>
@@ -308,11 +316,73 @@ public partial class MainWindow : Window
         _ = UpdateMedia();
     }
 
+    // ---------- agentes (Claude Code) ----------
+
+    void StartAgents()
+    {
+        var cfg = Config.Current;
+        // Os eventos chegam numa thread do servidor; o estado mora na thread da interface.
+        AgentServer = AgentServer.Start(cfg.AgentPort, cfg.AgentToken,
+            (evt, payload) => Dispatcher.InvokeAsync(() => Agents.Handle(evt, payload)).Task.Unwrap());
+        bool portMoved = AgentServer != null && AgentServer.Port != cfg.AgentPort;
+        if (portMoved) cfg.AgentPort = AgentServer!.Port;
+        try { cfg.Save(); } catch { } // guarda o código secreto gerado na primeira vez
+        if (portMoved && HookInstaller.IsInstalled())
+            Dispatcher.BeginInvoke(() => Toast("\uE7BA", "Agentes: a porta mudou, reconecte em Configurações", null, 8));
+        Agents.PermissionAsked += _ => ShowPermission();
+        Agents.Changed += () => { if (Agents.Pending.Count == 0) PermissionCard.Visibility = Visibility.Collapsed; else ShowPermission(); };
+        Agents.Finished += project =>
+        {
+            SystemSounds.Asterisk.Play();
+            Toast("\uE73E", $"{project}: o Claude terminou", Green, 5);
+            React("celebrate", 4);
+        };
+        Agents.NeedsYou += (project, message) =>
+        {
+            Toast("\uE7E7", $"{project}: {message}", new SolidColorBrush(Color.FromRgb(0xFF, 0x9F, 0x0A)), 6);
+            React("notifying", 3);
+        };
+    }
+
+    void ShowPermission()
+    {
+        if (Agents.Pending.FirstOrDefault() is not { } perm) return;
+        bool first = PermissionCard.Visibility != Visibility.Visible;
+        PermTitle.Text = $"{perm.Project}: o Claude pede permissão";
+        PermDetail.Text = perm.Detail;
+        PermAlways.Visibility = perm.Suggestions is System.Text.Json.Nodes.JsonArray { Count: > 0 } ? Visibility.Visible : Visibility.Collapsed;
+        PermQueue.Text = Agents.Pending.Count > 1 ? $"+{Agents.Pending.Count - 1} na fila" : "Sem resposta em ~2 min, ele pergunta no terminal";
+        PermissionCard.Visibility = Visibility.Visible;
+        if (!first) return;
+        SystemSounds.Exclamation.Play();
+        _autoClose.Stop();
+        if (!_open) Resize(true);
+        React("alerting", 3);
+    }
+
+    void Permission_Click(object s, RoutedEventArgs e)
+    {
+        if (Agents.Pending.FirstOrDefault() is not { } perm) return;
+        AgentHub.Decide(perm, (string)((Button)s).Tag);
+        React((string)((Button)s).Tag == "deny" ? "surprised" : "approving", 2);
+    }
+
+    void LookAtCursor()
+    {
+        if (!_open || AvatarButton.ActualWidth == 0) return;
+        var center = AvatarButton.PointToScreen(new Point(AvatarButton.ActualWidth / 2, AvatarButton.ActualHeight / 2));
+        GetCursorPos(out var pt);
+        // Distância em pixels → -1..1 (a ~250 px já olha para o lado todo); y positivo = para cima.
+        Avatar.LookAt(Math.Clamp((pt.X - center.X) / 250, -1, 1), Math.Clamp((center.Y - pt.Y) / 250, -1, 1));
+    }
+
     void Pill_MouseLeave(object s, MouseEventArgs e)
     {
         _lastSeen = DateTime.Now;
         // Digitando nas notas o notch fica aberto até você clicar fora.
-        if (!Pill.ContextMenu.IsOpen && !VolSlider.IsMouseCaptureWithin && !(Pill.IsKeyboardFocusWithin && Keyboard.FocusedElement is TextBox)) Resize(false);
+        // Com pedido de permissão aberto o notch espera a sua resposta.
+        if (!Pill.ContextMenu.IsOpen && !VolSlider.IsMouseCaptureWithin && !(Pill.IsKeyboardFocusWithin && Keyboard.FocusedElement is TextBox)
+            && Agents.Pending.Count == 0) Resize(false);
     }
 
     void Menu_Closed(object s, RoutedEventArgs e)
@@ -357,6 +427,7 @@ public partial class MainWindow : Window
         bool lowBattery = p.Percent <= 15 && p.AC != 1;
         Avatar.SetState(
             _playing ? "humming" :
+            Agents.Busy ? "coding" :
             lowBattery ? "drowsy" :
             !_open && DateTime.Now - _lastSeen > SleepAfter ? "sleeping" :
             "idle");

@@ -54,6 +54,26 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="ActionBtn" TargetType="Button">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="8" Padding="14,5">
+                            <ContentPresenter HorizontalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="BarBtn" TargetType="RepeatButton">
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="Template">
@@ -198,6 +218,29 @@
                         <local:TodoPage x:Name="TodoView" Visibility="Collapsed"/>
                         <local:ShortcutsPage x:Name="ShortcutsView" Visibility="Collapsed"/>
                         <local:AiPage x:Name="AiView" Visibility="Collapsed"/>
+
+                        <!-- Pedido de permissão do Claude Code: aparece por cima de qualquer aba -->
+                        <Border x:Name="PermissionCard" Background="#141416" Visibility="Collapsed" Panel.ZIndex="5">
+                            <DockPanel>
+                                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                                    <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="#FF9F0A" Margin="0,1,8,0"/>
+                                    <TextBlock x:Name="PermTitle" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                </DockPanel>
+                                <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                                    <TextBlock x:Name="PermQueue" FontSize="11" Foreground="#888" VerticalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <Button Content="Negar" Tag="deny" Click="Permission_Click" Style="{StaticResource ActionBtn}" Background="#3A2222" Foreground="#FF8A80" AutomationProperties.Name="Negar"/>
+                                        <Button x:Name="PermAlways" Content="Sempre" Tag="always" Click="Permission_Click" Style="{StaticResource ActionBtn}" Background="#26262B" Foreground="White" Margin="6,0" AutomationProperties.Name="Permitir sempre"/>
+                                        <Button Content="Permitir" Tag="allow" Click="Permission_Click" Style="{StaticResource ActionBtn}" Background="#30D158" Foreground="Black" AutomationProperties.Name="Permitir"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <Border Background="#1C1C20" CornerRadius="8" Padding="9,6">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <TextBlock x:Name="PermDetail" FontFamily="Cascadia Mono, Consolas" FontSize="11.5" TextWrapping="Wrap" Foreground="#DDD"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </DockPanel>
+                        </Border>
                         <Grid x:Name="HomePage">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>

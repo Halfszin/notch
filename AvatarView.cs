@@ -76,6 +76,12 @@ public class AvatarView : ContentControl
     /// <summary>Gesto por cima do que está tocando: "nod", "bounce" ou "spin".</summary>
     public void Poke(string gesture) => Run($"av&&av.poke({JsonSerializer.Serialize(gesture)})");
 
+    /// <summary>Para onde o avatar olha: x para a direita, y para cima, de -1 a 1; null = olhar livre.</summary>
+    public void LookAt(double? x, double? y) =>
+        Run(x is double lx && y is double ly
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"av&&av.setLookAt([{lx:0.00},{ly:0.00}])")
+            : "av&&av.setLookAt(null)");
+
     public void Pause() => Run("av&&av.pause()");
     public void Resume() => Run("av&&av.resume()");
 

@@ -8,7 +8,7 @@ namespace Orbi;
 public static class AiChat
 {
     const string Model = "claude-opus-5-5";
-    const string Instructions =
+    public const string Instructions =
         "Você responde perguntas rápidas dentro de um notch pequeno no Windows. Responda em português do Brasil, " +
         "direto ao ponto, em no máximo 4 frases curtas, sem títulos nem tabelas. Use a busca na web quando a resposta " +
         "depender de algo atual (notícias, preços, placares, horários) e diga de qual site veio.";

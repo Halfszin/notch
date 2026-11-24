@@ -217,6 +217,20 @@
                         </Grid>
                     </Border>
 
+                    <TextBlock Text="AGENTES (CLAUDE CODE)" Style="{StaticResource Label}"/>
+                    <Border Style="{StaticResource Card}">
+                        <Grid Style="{StaticResource Row}">
+                            <StackPanel Margin="0,0,250,0">
+                                <TextBlock Text="Sessões, permissões e limites do plano no notch" Style="{StaticResource RowTitle}"/>
+                                <TextBlock x:Name="AgentsStatus" Style="{StaticResource RowSub}"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Button x:Name="AgentsOff" Content="Desconectar" Style="{StaticResource PillBtn}" Margin="0,0,8,0" Click="AgentsOff_Click"/>
+                                <Button x:Name="AgentsOn" Content="Conectar" Style="{StaticResource PillBtn}" Click="AgentsOn_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
                     <TextBlock Text="NOTIFICAÇÕES" Style="{StaticResource Label}"/>
                     <Border Style="{StaticResource Card}">
                         <Grid Style="{StaticResource Row}">

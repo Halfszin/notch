@@ -24,6 +24,7 @@ public partial class SettingsWindow : Window
         CityStatus.Text = Config.Current.City == null ? "Escreva sua cidade para ver o clima no notch." : $"Mostrando o clima de {Config.Current.City}.";
         ShowKeyStatus();
         NotifSwitch.IsChecked = Config.Current.AppNotifications;
+        ShowAgentsStatus();
         VersionText.Text = $"Orbi {Updater.Current}";
         Updater.Changed += ShowUpdate;
         Closed += (_, _) => Updater.Changed -= ShowUpdate;
@@ -129,6 +130,49 @@ public partial class SettingsWindow : Window
         ShowKeyStatus();
     }
 
+    void ShowAgentsStatus(string? extra = null)
+    {
+        bool on = HookInstaller.IsInstalled();
+        AgentsOn.Content = on ? "Reconectar" : "Conectar";
+        AgentsOff.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        AgentsStatus.Text = (on
+            ? "Conectado. Veja na aba IA → Agentes; pedidos de permissão aparecem no notch com Permitir / Sempre / Negar."
+            : "Mostra o que cada sessão do Claude Code está fazendo, deixa você aprovar comandos pelo notch e avisa quando ele termina.")
+            + (extra != null ? "\n" + extra : "");
+    }
+
+    void AgentsOn_Click(object s, RoutedEventArgs e)
+    {
+        var server = App.OrbiWindow.AgentServer;
+        if (server == null) { ShowAgentsStatus("Não deu para abrir a porta local dos agentes. Feche e abra o Orbi."); return; }
+        var ok = MessageBox.Show(this,
+            $"O Orbi vai adicionar os hooks dele ao arquivo do Claude Code:\n{HookInstaller.SettingsPath}\n\n" +
+            "• Antes, uma cópia de segurança do arquivo é salva ao lado dele.\n" +
+            "• Suas configurações e hooks de outros programas não são mexidos.\n" +
+            "• Se você não tiver uma status line, o Orbi coloca a dele (mostra os limites do plano).\n" +
+            "• Com o Orbi fechado, o Claude Code continua funcionando normalmente.\n\n" +
+            "Sessões do Claude Code já abertas só passam a aparecer depois de reiniciadas. Continuar?",
+            "Conectar ao Claude Code", MessageBoxButton.OKCancel, MessageBoxImage.Question);
+        if (ok != MessageBoxResult.OK) return;
+        try
+        {
+            var (backup, statusLine) = HookInstaller.Install(server.Port, Config.Current.AgentToken);
+            ShowAgentsStatus((backup != null ? $"Cópia de segurança: {backup}" : "Arquivo criado.")
+                + (statusLine ? "" : " Você já tinha uma status line, então ela ficou como estava (sem os limites do plano no Orbi)."));
+        }
+        catch (Exception ex) { ShowAgentsStatus("Não conectou: " + ex.Message); }
+    }
+
+    void AgentsOff_Click(object s, RoutedEventArgs e)
+    {
+        try
+        {
+            string? backup = HookInstaller.Uninstall();
+            ShowAgentsStatus("Desconectado: só as entradas do Orbi saíram." + (backup != null ? $" Cópia de segurança: {backup}" : ""));
+        }
+        catch (Exception ex) { ShowAgentsStatus("Não desconectou: " + ex.Message); }
+    }
+
     void ShowKeyStatus() => KeyStatus.Text = Config.Current.ApiKey is { } k
         ? $"Chave salva (…{k[^4..]}), guardada cifrada pela sua conta do Windows. Para trocar, cole outra; para apagar, salve vazio."
         : "Usada pelo chat da aba IA. Fica guardada cifrada pela sua conta do Windows.";
@@ -167,7 +211,7 @@ public partial class SettingsWindow : Window
         DefaultAvatarBtn.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
         string result = BannerAvatar.LastResult;
         AvatarStatus.Text = result is "ok" or "none"
-            ? custom ? "Usando o avatar que você escolheu." : "Usando o avatar padrão (New avatar)."
+            ? custom ? "Usando o avatar que você escolheu." : "Usando o avatar padrão do Orbi."
             : "O avatar não carregou: " + result;
     }
 

@@ -12,5 +12,8 @@
     <Compile Include="../TaskParser.cs" />
     <Compile Include="../ToastText.cs" />
     <Compile Include="../UsageLog.cs" />
+    <Compile Include="../HookInstaller.cs" />
+    <Compile Include="../AgentHub.cs" />
+    <Compile Include="../AgentServer.cs" />
   </ItemGroup>
 </Project>

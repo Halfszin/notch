@@ -13,6 +13,17 @@ public partial class AiPage : UserControl
     int _todayQuestions;
     DateTime _countDay = DateTime.Today;
 
+    AgentHub? _hub;
+    public AgentHub? Hub
+    {
+        get => _hub;
+        set
+        {
+            _hub = value;
+            if (value != null) value.Changed += () => { if (AgentsPanel.Visibility == Visibility.Visible) DrawAgents(); };
+        }
+    }
+
     /// <summary>true enquanto espera a resposta (o avatar fica "pensando").</summary>
     public event Action<bool>? Thinking;
 
@@ -25,11 +36,13 @@ public partial class AiPage : UserControl
     void Mode_Checked(object s, RoutedEventArgs e)
     {
         if (UsagePanel == null) return; // o XAML marca "Chat" antes de criar os painéis
-        bool usage = UsageMode.IsChecked == true;
-        ChatPanel.Visibility = usage ? Visibility.Collapsed : Visibility.Visible;
+        bool usage = UsageMode.IsChecked == true, agents = AgentsMode.IsChecked == true;
+        ChatPanel.Visibility = usage || agents ? Visibility.Collapsed : Visibility.Visible;
         UsagePanel.Visibility = usage ? Visibility.Visible : Visibility.Collapsed;
-        NewChat.Visibility = usage ? Visibility.Collapsed : Visibility.Visible;
+        AgentsPanel.Visibility = agents ? Visibility.Visible : Visibility.Collapsed;
+        NewChat.Visibility = usage || agents ? Visibility.Collapsed : Visibility.Visible;
         if (usage) _ = LoadUsage();
+        if (agents) DrawAgents();
     }
 
     // ---------- chat ----------
@@ -37,9 +50,9 @@ public partial class AiPage : UserControl
     void ShowWelcome()
     {
         Messages.Children.Clear();
-        Bubble(Config.Current.ApiKey == null
-            ? "Para perguntar, coloque sua chave da API do Claude em Configurações → Inteligência artificial."
-            : "Pergunte qualquer coisa. Eu busco na web quando precisar e respondo curtinho aqui.", false, muted: true);
+        Bubble(Config.Current.ApiKey != null ? "Pergunte qualquer coisa. Eu busco na web quando precisar e respondo curtinho aqui."
+            : ClaudeCli.Find() != null ? "Pergunte qualquer coisa. Vou responder pela sua assinatura do Claude (Claude Code), com busca na web."
+            : "Para perguntar, instale o Claude Code (usa sua assinatura do Claude) ou coloque uma chave da API em Configurações → Inteligência artificial.", false, muted: true);
     }
 
     void NewChat_Click(object s, MouseButtonEventArgs e)
@@ -56,12 +69,13 @@ public partial class AiPage : UserControl
         if (e.Key != Key.Enter || string.IsNullOrWhiteSpace(AskInput.Text) || _pending != null) return;
         string question = AskInput.Text.Trim();
         string? key = Config.Current.ApiKey;
+        string? cli = key == null ? ClaudeCli.Find() : null;
         if (_history.Count == 0) Messages.Children.Clear();
         AskInput.Clear();
         Bubble(question, true);
-        if (key == null)
+        if (key == null && cli == null)
         {
-            Bubble("Falta a chave da API: Configurações → Inteligência artificial.", false, muted: true);
+            Bubble("Instale o Claude Code ou coloque uma chave da API em Configurações → Inteligência artificial.", false, muted: true);
             return;
         }
         var waiting = Bubble("Pensando…", false, muted: true);
@@ -70,7 +84,11 @@ public partial class AiPage : UserControl
         try
         {
             // Só as últimas 3 perguntas e respostas vão junto: o chat é para coisas rápidas.
-            var reply = await AiChat.Ask(key, _history.TakeLast(6).ToList(), question, _pending.Token);
+            var history = _history.TakeLast(6).ToList();
+            // Com chave: API do Claude. Sem chave: a sua assinatura, pelo Claude Code instalado.
+            var reply = key != null
+                ? await AiChat.Ask(key, history, question, _pending.Token)
+                : new AiChat.Reply(await ClaudeCli.Ask(cli!, ClaudeCli.Prompt(history, question), AiChat.Instructions, _pending.Token), 0, 0);
             Messages.Children.Remove(waiting);
             Bubble(reply.Text, false);
             _history.Add((true, question));
@@ -122,6 +140,27 @@ public partial class AiPage : UserControl
         return bubble;
     }
 
+    // ---------- agentes ----------
+
+    void DrawAgents()
+    {
+        AgentRows.Children.Clear();
+        if (_hub == null) return;
+        if (_hub.Plan is { } plan)
+        {
+            Header("Plano do Claude", AgentRows);
+            if (plan.FiveHour is { } f) Row("Últimas 5 horas", $"{f.UsedPct:0}% · renova às {f.ResetsAt.ToLocalTime():HH:mm}", target: AgentRows);
+            if (plan.SevenDay is { } w) Row("Semana", $"{w.UsedPct:0}% · renova {w.ResetsAt.ToLocalTime():ddd HH:mm}", target: AgentRows);
+        }
+        Header("Sessões do Claude Code", AgentRows);
+        if (!HookInstaller.IsInstalled())
+            Row("Ainda não conectado", "Configurações → Agentes", muted: true, target: AgentRows);
+        else if (_hub.Sessions.Count == 0)
+            Row("Nenhuma sessão agora", "abra o Claude Code no terminal", muted: true, target: AgentRows);
+        foreach (var s in _hub.Sessions.Values.OrderByDescending(x => x.Updated))
+            Row((s.Busy ? "● " : "○ ") + s.Project, s.Status, target: AgentRows);
+    }
+
     // ---------- consumo ----------
 
     async Task LoadUsage()
@@ -163,15 +202,15 @@ public partial class AiPage : UserControl
 
     static string Fmt(long n) => n >= 1_000_000 ? $"{n / 1_000_000.0:0.0} mi" : n >= 1_000 ? $"{n / 1_000.0:0.0} mil" : n.ToString();
 
-    void Header(string text) => UsageRows.Children.Add(new TextBlock { Text = text.ToUpperInvariant(), FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Gray, Margin = new Thickness(0, 6, 0, 3) });
+    void Header(string text, Panel? target = null) => (target ?? (AgentsPanel.Visibility == Visibility.Visible ? AgentRows : UsageRows)).Children.Add(new TextBlock { Text = text.ToUpperInvariant(), FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Gray, Margin = new Thickness(0, 6, 0, 3) });
 
-    void Row(string label, string value, bool muted = false)
+    void Row(string label, string value, bool muted = false, Panel? target = null)
     {
         var row = new DockPanel { Margin = new Thickness(0, 1, 0, 1) };
         var v = new TextBlock { Text = value, FontSize = 12, Foreground = Brushes.LightGray };
         DockPanel.SetDock(v, Dock.Right);
         row.Children.Add(v);
         row.Children.Add(new TextBlock { Text = label, FontSize = 12, Foreground = muted ? Brushes.Gray : Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis });
-        UsageRows.Children.Add(row);
+        (target ?? UsageRows).Children.Add(row);
     }
 }

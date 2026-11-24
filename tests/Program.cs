@@ -107,6 +107,64 @@ var sum = UsageLog.Summarize(lines, now);
 if (sum.TodayMessages != 1 || sum.Today.Total != 130 || sum.WeekMessages != 2 || sum.Week.Total != 240 || sum.WeekByModel.Count != 2)
     failures.Add($"consumo: hoje {sum.TodayMessages}/{sum.Today.Total} semana {sum.WeekMessages}/{sum.Week.Total} modelos {sum.WeekByModel.Count}");
 
+// ---- Hooks do Claude Code (mexe no settings.json da pessoa: tem que preservar tudo) ----
+var original = (System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse(
+    "{\"model\":\"opus\",\"theme\":\"dark\",\"statusLine\":{\"type\":\"command\",\"command\":\"meu-status.sh\"}," +
+    "\"hooks\":{\"PreToolUse\":[{\"matcher\":\"Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"outro-app.exe\"}]}]}}")!;
+var once = HookInstaller.Merge(original, 47821, "tok", out bool sl1);
+var twice = HookInstaller.Merge(once, 47821, "tok", out _);
+var pre = twice["hooks"]!["PreToolUse"]!.AsArray();
+if (pre.Count != 2) failures.Add($"hooks: PreToolUse com {pre.Count} entradas (esperado: a sua + a do Orbi, sem duplicar)");
+if (twice["model"]!.GetValue<string>() != "opus" || twice["theme"]!.GetValue<string>() != "dark") failures.Add("hooks: perdeu configurações da pessoa");
+if (sl1 || !twice["statusLine"]!.ToJsonString().Contains("meu-status.sh")) failures.Add("hooks: trocou a status line que já existia");
+if (twice["hooks"]!.AsObject().Count != HookInstaller.Events.Length) failures.Add("hooks: faltou evento");
+var removed = HookInstaller.Unmerge(twice);
+if (removed.ToJsonString() != original.ToJsonString()) failures.Add("hooks: desligar não voltou ao original: " + removed.ToJsonString());
+var fresh = HookInstaller.Merge(null, 1, "t", out bool sl2);
+if (!sl2 || HookInstaller.Unmerge(fresh).ToJsonString() != "{}") failures.Add("hooks: instalar/desinstalar num arquivo novo");
+try { HookInstaller.Merge((System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse("{\"hooks\":[1]}")!, 1, "t", out _); failures.Add("hooks: aceitou formato estranho"); }
+catch (InvalidDataException) { }
+// ---- Agentes ----
+if (AgentHub.Describe("Edit", System.Text.Json.Nodes.JsonNode.Parse("{\"file_path\":\"C:/proj/src/app.ts\"}")) != "Editando app.ts") failures.Add("descrição Edit");
+if (!AgentHub.Describe("Bash", System.Text.Json.Nodes.JsonNode.Parse("{\"command\":\"npm test\"}")).Contains("npm test")) failures.Add("descrição Bash");
+var allow = AgentHub.PermissionResponse("always", System.Text.Json.Nodes.JsonNode.Parse("[{\"type\":\"addRules\"}]"));
+if (!allow.Contains("\"behavior\":\"allow\"") || !allow.Contains("updatedPermissions") || !allow.Contains("PermissionRequest")) failures.Add("resposta sempre: " + allow);
+if (!AgentHub.PermissionResponse("deny", null).Contains("\"behavior\":\"deny\"")) failures.Add("resposta negar");
+long soon = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 3600;
+var plan = AgentHub.ParsePlan((System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse($"{{\"rate_limits\":{{\"five_hour\":{{\"used_percentage\":23.5,\"resets_at\":{soon}}},\"seven_day\":{{\"used_percentage\":250,\"resets_at\":{soon}}}}}}}")!);
+if (plan?.FiveHour?.UsedPct != 23.5 || plan.SevenDay != null) failures.Add("plano: leitura dos limites");
+if (AgentHub.ParsePlan((System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse($"{{\"rate_limits\":{{\"five_hour\":{{\"used_percentage\":5,\"resets_at\":{soon * 1000}}}}}}}")!) != null) failures.Add("plano: aceitou milissegundos");
+
+// ---- Receptor dos hooks, com o mesmo curl que o Claude Code roda ----
+var hub = new AgentHub();
+hub.PermissionAsked += perm => AgentHub.Decide(perm, "allow"); // como se você clicasse Permitir
+var server = AgentServer.Start(47900, "segredo123", hub.Handle)!;
+string Curl(string url, string body)
+{
+    var psi = new System.Diagnostics.ProcessStartInfo("bash", new[] { "-c", $"curl -s -m 10 --data-binary @- {url} || true" })
+        { RedirectStandardInput = true, RedirectStandardOutput = true };
+    using var proc = System.Diagnostics.Process.Start(psi)!;
+    proc.StandardInput.Write(body);
+    proc.StandardInput.Close();
+    string output = proc.StandardOutput.ReadToEnd();
+    proc.WaitForExit();
+    return output;
+}
+string baseUrl = $"http://127.0.0.1:{server.Port}/segredo123";
+Curl($"{baseUrl}/PreToolUse", "{\"session_id\":\"s1\",\"cwd\":\"C:/projetos/loja\",\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"C:/projetos/loja/app.ts\"}}");
+if (!hub.Sessions.TryGetValue("s1", out var sess) || sess.Project != "loja" || sess.Status != "Editando app.ts" || !sess.Busy) failures.Add("servidor: evento PreToolUse");
+string decision = Curl($"{baseUrl}/PermissionRequest", "{\"session_id\":\"s1\",\"cwd\":\"C:/projetos/loja\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"npm test\"}}");
+if (!decision.Contains("\"behavior\":\"allow\"")) failures.Add("servidor: permissão não voltou: " + decision);
+if (Curl($"http://127.0.0.1:{server.Port}/errado/Stop", "{}") != "") failures.Add("servidor: aceitou código errado");
+string big = "{\"session_id\":\"s2\",\"cwd\":\"/x/y\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"a.txt\",\"content\":\"" + new string('x', 200_000) + "\"}}";
+Curl($"{baseUrl}/PreToolUse", big);
+if (!hub.Sessions.ContainsKey("s2")) failures.Add("servidor: corpo grande (Expect: 100-continue)");
+long nowS = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 3600;
+string status = Curl($"{baseUrl}/statusline", $"{{\"model\":{{\"display_name\":\"Opus\"}},\"rate_limits\":{{\"five_hour\":{{\"used_percentage\":42,\"resets_at\":{nowS}}}}}}}");
+if (status != "Opus · 5h 42%") failures.Add("servidor: status line: " + status);
+Curl($"{baseUrl}/Stop", "{\"session_id\":\"s1\",\"cwd\":\"C:/projetos/loja\"}");
+if (hub.Sessions["s1"].Busy || hub.Sessions["s1"].Status != "Terminou") failures.Add("servidor: Stop");
+
 foreach (var f in failures) Console.WriteLine("FALHA " + f);
 ok &= failures.Count == 0;
 Console.WriteLine(ok ? "OK" : "FALHOU");
