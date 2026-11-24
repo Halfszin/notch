@@ -1,0 +1,14 @@
+<UserControl x:Class="Orbi.NotesPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Foreground="White" FontFamily="Segoe UI">
+    <DockPanel>
+        <TextBlock x:Name="Status" DockPanel.Dock="Bottom" FontSize="10" Foreground="#666" HorizontalAlignment="Right" Margin="0,2,4,0"/>
+        <Grid>
+            <TextBlock x:Name="Placeholder" Text="Anote algo rápido… (salva sozinho)" FontSize="13" Foreground="#555" Margin="6,4" IsHitTestVisible="False"/>
+            <TextBox x:Name="Box" Background="Transparent" Foreground="White" CaretBrush="White" BorderThickness="0"
+                     FontSize="13" AcceptsReturn="True" AcceptsTab="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                     Padding="2" SelectionBrush="#30D158" AutomationProperties.Name="Notas rápidas" TextChanged="Box_TextChanged"/>
+        </Grid>
+    </DockPanel>
+</UserControl>

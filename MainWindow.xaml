@@ -97,7 +97,8 @@
 
     <Border x:Name="Pill" Background="Black" ClipToBounds="True" Width="120" Height="30"
             MouseEnter="Pill_MouseEnter" MouseLeave="Pill_MouseLeave"
-            MouseLeftButtonDown="Pill_MouseLeftButtonDown" MouseMove="Pill_MouseMove" MouseLeftButtonUp="Pill_MouseLeftButtonUp">
+            MouseLeftButtonDown="Pill_MouseLeftButtonDown" MouseMove="Pill_MouseMove" MouseLeftButtonUp="Pill_MouseLeftButtonUp"
+            AllowDrop="True" DragEnter="Pill_DragEnter" DragOver="Pill_DragOver" Drop="Pill_Drop">
         <Border.RenderTransform>
             <ScaleTransform x:Name="PillScale"/>
         </Border.RenderTransform>
@@ -128,6 +129,12 @@
                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </StackPanel>
 
+            <!-- Aviso rápido (fone conectou, carregador, bateria fraca) -->
+            <StackPanel x:Name="ToastPanel" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0" IsHitTestVisible="False">
+                <TextBlock x:Name="ToastIcon" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock x:Name="ToastText" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="240"/>
+            </StackPanel>
+
             <!-- Aberto -->
             <Grid x:Name="Full" Width="440" Height="264" Opacity="0" IsHitTestVisible="False">
                 <Grid Margin="14,6,14,8">
@@ -140,9 +147,17 @@
                     <!-- Barra de navegação embaixo -->
                     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,6,0,0">
                         <RadioButton Style="{StaticResource Tab}" Content="&#xE80F;" Tag="home" IsChecked="True" Checked="Tab_Checked"
-                                     ToolTip="Início" AutomationProperties.Name="Início" Margin="4,0"/>
+                                     ToolTip="Início" AutomationProperties.Name="Início" Margin="3,0"/>
                         <RadioButton Style="{StaticResource Tab}" Content="&#xE787;" Tag="calendar" Checked="Tab_Checked"
-                                     ToolTip="Calendário e timer" AutomationProperties.Name="Calendário" Margin="4,0"/>
+                                     ToolTip="Calendário e timer" AutomationProperties.Name="Calendário" Margin="3,0"/>
+                        <RadioButton x:Name="TabShelf" Style="{StaticResource Tab}" Content="&#xE896;" Tag="shelf" Checked="Tab_Checked"
+                                     ToolTip="Bandeja de arquivos" AutomationProperties.Name="Bandeja" Margin="3,0"/>
+                        <RadioButton Style="{StaticResource Tab}" Content="&#xE77F;" Tag="clip" Checked="Tab_Checked"
+                                     ToolTip="Área de transferência" AutomationProperties.Name="Área de transferência" Margin="3,0"/>
+                        <RadioButton Style="{StaticResource Tab}" Content="&#xE70B;" Tag="notes" Checked="Tab_Checked"
+                                     ToolTip="Notas rápidas" AutomationProperties.Name="Notas" Margin="3,0"/>
+                        <RadioButton Style="{StaticResource Tab}" Content="&#xE9D9;" Tag="system" Checked="Tab_Checked"
+                                     ToolTip="Sistema" AutomationProperties.Name="Sistema" Margin="3,0"/>
                     </StackPanel>
 
                     <DockPanel>
@@ -168,6 +183,10 @@
                     <Border Grid.Row="1" Background="#141416" CornerRadius="16" BorderBrush="#222226" BorderThickness="1" Padding="10,10,14,10">
                         <Grid>
                         <local:CalendarPage x:Name="CalendarView" Visibility="Collapsed"/>
+                        <local:ShelfPage x:Name="ShelfView" Visibility="Collapsed"/>
+                        <local:ClipboardPage x:Name="ClipView" Visibility="Collapsed"/>
+                        <local:NotesPage x:Name="NotesView" Visibility="Collapsed"/>
+                        <local:SystemPage x:Name="SystemView" Visibility="Collapsed"/>
                         <Grid x:Name="HomePage">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>

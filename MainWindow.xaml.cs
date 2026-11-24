@@ -47,7 +47,11 @@ public partial class MainWindow : Window
     double _bassSmooth;
     System.Windows.Shapes.Rectangle[] _barRects = null!;
     Point? _dragFrom;
-    bool _dragging;
+    bool _dragging, _toasting;
+    readonly DispatcherTimer _toastTimer = new() { Interval = TimeSpan.FromSeconds(3.5) };
+    readonly MMDeviceEnumerator _deviceEvents = new();
+    readonly AudioWatcher _audioWatcher = new();
+    int _lowWarnAt = 20;
 
     public string Edge { get; private set; } = "Top";
     /// <summary>Posição ao longo da borda: 0 = começo (esquerda/cima), 1 = fim.</summary>
@@ -66,6 +70,17 @@ public partial class MainWindow : Window
         _beat.Tick += (_, _) => Beat();
         _autoClose.Tick += (_, _) => { _autoClose.Stop(); if (!Pill.IsMouseOver) Resize(false); };
         CalendarView.Finished += TimerFinished;
+        _toastTimer.Tick += (_, _) => { _toastTimer.Stop(); _toasting = false; if (!_open) Resize(false); };
+        _audioWatcher.DefaultOutputChanged += id => Dispatcher.BeginInvoke(() => OutputChanged(id));
+        try { _deviceEvents.RegisterEndpointNotificationCallback(_audioWatcher); } catch { }
+        // Notas: a janela do notch normalmente não pega o teclado (para não roubar o foco); ao clicar
+        // nas notas ela passa a aceitar, e volta ao normal quando você clica fora.
+        NotesView.Box.PreviewMouseLeftButtonDown += (_, _) => AllowKeyboard(true);
+        Deactivated += (_, _) =>
+        {
+            AllowKeyboard(false);
+            if (!Pill.IsMouseOver) Resize(false);
+        };
         Updater.Changed += () => Dispatcher.Invoke(() =>
             UpdateDot.Visibility = Updater.ReadyFile != null ? Visibility.Visible : Visibility.Collapsed);
         Loaded += async (_, _) =>
@@ -82,6 +97,76 @@ public partial class MainWindow : Window
         var h = new WindowInteropHelper(this).Handle;
         // WS_EX_TOOLWINDOW: fora do Alt+Tab. WS_EX_NOACTIVATE: clicar no notch não rouba o foco da janela atual.
         SetWindowLong(h, -20, GetWindowLong(h, -20) | 0x80 | 0x08000000);
+        // Avisos de "algo foi copiado" para o histórico da área de transferência.
+        AddClipboardFormatListener(h);
+        HwndSource.FromHwnd(h)!.AddHook((IntPtr hwnd, int msg, IntPtr w, IntPtr l, ref bool handled) =>
+        {
+            if (msg == 0x031D) ClipView.Capture(); // WM_CLIPBOARDUPDATE
+            return IntPtr.Zero;
+        });
+    }
+
+    void AllowKeyboard(bool on)
+    {
+        var h = new WindowInteropHelper(this).Handle;
+        int ex = GetWindowLong(h, -20);
+        SetWindowLong(h, -20, on ? ex & ~0x08000000 : ex | 0x08000000);
+        if (on) Activate();
+    }
+
+    // ---------- avisos rápidos no notch fechado ----------
+
+    public void Toast(string glyph, string text, Brush? color = null)
+    {
+        ToastIcon.Text = glyph;
+        ToastIcon.Foreground = color ?? Brushes.White;
+        ToastText.Text = text;
+        _toasting = true;
+        _toastTimer.Stop();
+        _toastTimer.Start();
+        if (!_open) Resize(false);
+    }
+
+    void OutputChanged(string deviceId)
+    {
+        string name = "nova saída de som";
+        try
+        {
+            using var en = new MMDeviceEnumerator();
+            using var dev = en.GetDevice(deviceId);
+            name = dev.FriendlyName;
+        }
+        catch { }
+        Toast("\uE7F6", name);
+        React("happy", 2);
+        // O visualizador passa a escutar a saída nova.
+        if (_playing) { StopCapture(); StartCapture(); }
+    }
+
+    // ---------- bandeja: soltar coisas no notch ----------
+
+    void Pill_DragEnter(object s, DragEventArgs e)
+    {
+        if (ShelfView.Dragging) return;
+        if (!_open) Resize(true);
+        TabShelf.IsChecked = true;
+    }
+
+    void Pill_DragOver(object s, DragEventArgs e)
+    {
+        e.Effects = ShelfView.Dragging ? DragDropEffects.None : DragDropEffects.Copy;
+        e.Handled = true;
+    }
+
+    void Pill_Drop(object s, DragEventArgs e)
+    {
+        if (ShelfView.Dragging) return;
+        if (ShelfView.Accept(e.Data))
+        {
+            React("happy", 2);
+            Avatar.Poke("bounce");
+        }
+        _autoClose.Start();
     }
 
     // ---------- posição ----------
@@ -125,7 +210,6 @@ public partial class MainWindow : Window
     void Pill_MouseLeftButtonDown(object s, MouseButtonEventArgs e)
     {
         _dragFrom = CursorDip();
-        Pill.CaptureMouse();
     }
 
     void Pill_MouseMove(object s, MouseEventArgs e)
@@ -136,6 +220,7 @@ public partial class MainWindow : Window
         if (!_dragging)
         {
             _dragging = true;
+            Pill.CaptureMouse();
             Resize(false);
         }
         double sw = SystemParameters.PrimaryScreenWidth, sh = SystemParameters.PrimaryScreenHeight;
@@ -163,7 +248,8 @@ public partial class MainWindow : Window
     {
         _open = open;
         bool side = Edge != "Top";
-        double w = open ? FullW : side ? 32 : 120, h = open ? FullH : side ? 100 : 30;
+        bool toast = _toasting && !open;
+        double w = open ? FullW : toast ? 300 : side ? 32 : 120, h = open ? FullH : toast ? 36 : side ? 100 : 30;
         var d = TimeSpan.FromMilliseconds(animate ? (open ? 340 : 220) : 0);
         // Abrir com um leve "pulo" (estilo ilha dinâmica); fechar direto.
         IEasingFunction ease = open
@@ -172,7 +258,9 @@ public partial class MainWindow : Window
         Pill.BeginAnimation(WidthProperty, new DoubleAnimation(w, d) { EasingFunction = ease });
         Pill.BeginAnimation(HeightProperty, new DoubleAnimation(h, d) { EasingFunction = ease });
         Fade(Full, open ? 1 : 0, animate ? (open ? 220 : 90) : 0, open && animate ? 100 : 0);
-        Fade(Mini, open ? 0 : 1, animate ? 140 : 0, !open && animate ? 120 : 0);
+        Fade(Mini, open || toast ? 0 : 1, animate ? 140 : 0, !open && !toast && animate ? 120 : 0);
+        Fade(ToastPanel, toast ? 1 : 0, animate ? 160 : 0, toast && animate ? 120 : 0);
+        if (!open) AllowKeyboard(false);
         Full.IsHitTestVisible = open;
         if (open) Avatar.Resume(); else Avatar.Pause();
     }
@@ -199,7 +287,8 @@ public partial class MainWindow : Window
     void Pill_MouseLeave(object s, MouseEventArgs e)
     {
         _lastSeen = DateTime.Now;
-        if (!Pill.ContextMenu.IsOpen && !VolSlider.IsMouseCaptureWithin) Resize(false);
+        // Digitando nas notas o notch fica aberto até você clicar fora.
+        if (!Pill.ContextMenu.IsOpen && !VolSlider.IsMouseCaptureWithin && !NotesView.Box.IsKeyboardFocusWithin) Resize(false);
     }
 
     void Menu_Closed(object s, RoutedEventArgs e)
@@ -209,10 +298,11 @@ public partial class MainWindow : Window
 
     void Tab_Checked(object s, RoutedEventArgs e)
     {
-        if (CalendarView == null) return; // o XAML marca "Início" antes de criar as páginas
-        bool calendar = (string)((RadioButton)s).Tag == "calendar";
-        CalendarView.Visibility = calendar ? Visibility.Visible : Visibility.Collapsed;
-        HomePage.Visibility = calendar ? Visibility.Collapsed : Visibility.Visible;
+        if (SystemView == null) return; // o XAML marca "Início" antes de criar as páginas
+        string tag = (string)((RadioButton)s).Tag;
+        foreach (var (name, page) in new (string, UIElement)[]
+                 { ("home", HomePage), ("calendar", CalendarView), ("shelf", ShelfView), ("clip", ClipView), ("notes", NotesView), ("system", SystemView) })
+            page.Visibility = name == tag ? Visibility.Visible : Visibility.Collapsed;
     }
 
     void Settings_Click(object s, RoutedEventArgs e) => App.OpenSettings();
@@ -278,6 +368,7 @@ public partial class MainWindow : Window
         ShowMiniClock();
         DateText.Text = now.ToString("ddd dd MMM yyyy", PtBr).Replace(".", "");
         CalendarView.Refresh();
+        SystemView.Update(SafeDeviceName());
         UpdateBattery();
         await UpdateMedia();
         ApplyMood();
@@ -294,9 +385,21 @@ public partial class MainWindow : Window
         RingMini.Stroke = RingFull.Stroke = BoltMini.Fill = BoltFull.Fill = brush;
         BoltMini.Visibility = BoltFull.Visibility = charging ? Visibility.Visible : Visibility.Collapsed;
         BatteryText.Text = none ? "" : $"{p.Percent}%";
-        // Ligou o carregador: fica animado. Tirou: leva um susto.
-        if (!none && _wasCharging is bool was && was != charging) React(charging ? "excited" : "surprised", 3);
+        // Ligou o carregador: fica animado e avisa. Tirou: leva um susto e avisa.
+        if (!none && _wasCharging is bool was && was != charging)
+        {
+            React(charging ? "excited" : "surprised", 3);
+            Toast(charging ? "\uE945" : "\uE83F", charging ? $"Carregando · {p.Percent}%" : $"Na bateria · {p.Percent}%", brush);
+        }
         if (!none) _wasCharging = charging;
+        // Bateria fraca: avisa em 20% e de novo em 10% (rearma quando carregar).
+        if (charging) _lowWarnAt = 20;
+        else if (!none && p.Percent <= _lowWarnAt)
+        {
+            Toast("\uE83F", $"Bateria fraca · {p.Percent}%", Red);
+            React("drowsy", 4);
+            _lowWarnAt = p.Percent <= 10 ? -1 : 10;
+        }
     }
 
     // Arco no sentido horário a partir do topo, centro (9,9), raio 7.5 (anel de 18px).
@@ -574,6 +677,11 @@ public partial class MainWindow : Window
         catch { }
     }
 
+    string? SafeDeviceName()
+    {
+        try { return _audioDevice?.FriendlyName; } catch { return null; }
+    }
+
     // ---------- Win32 ----------
 
     [StructLayout(LayoutKind.Sequential)]
@@ -584,6 +692,7 @@ public partial class MainWindow : Window
 
     [DllImport("kernel32.dll")] static extern bool GetSystemPowerStatus(out PowerStatus s);
     [DllImport("user32.dll")] static extern bool GetCursorPos(out CursorPoint p);
+    [DllImport("user32.dll")] static extern bool AddClipboardFormatListener(IntPtr hwnd);
     [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
     [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr h, int i, int v);
 }

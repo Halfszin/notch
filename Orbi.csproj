@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Orbi</AssemblyName>
-    <Version>1.3.0</Version>
+    <Version>1.4.0</Version>
     <ApplicationIcon>orbi.ico</ApplicationIcon>
     <DefaultItemExcludes>$(DefaultItemExcludes);web/node_modules/**;tests/**;publish/**;dist/**;ci/**</DefaultItemExcludes>
   </PropertyGroup>
@@ -17,6 +17,7 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="orbi.ico" />
+    <Resource Include="orbi.png" />
     <!-- Renderizador do avatar (@bible-strong/avatar-web). Gerar de novo: cd web && npm install && npm run build -->
     <EmbeddedResource Include="web/avatar.bundle.js" LogicalName="avatar.bundle.js" />
     <EmbeddedResource Include="web/new-avatar.avatar.json" LogicalName="default.avatar.json" />

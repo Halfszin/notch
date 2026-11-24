@@ -60,6 +60,17 @@ jobs:
             (Find "Calendário").GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
             Start-Sleep 1
             Shot "4-calendario"
+            function Tab($name, $shot) {
+              (Find $name).GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+              Start-Sleep 2
+              Shot $shot
+            }
+            Set-Clipboard -Value "Texto copiado no teste do CI"
+            Start-Sleep 1
+            Tab "Área de transferência" "6-area-transferencia"
+            Tab "Sistema" "7-sistema"
+            Tab "Notas" "8-notas"
+            Tab "Bandeja" "9-bandeja"
           } catch { "UIA: $_" | Out-File ci\uia.txt }
           "vivo=$(-not $p.HasExited)" | Out-File ci\resultado.txt
           $log = "$env:APPDATA\Orbi\erros.log"

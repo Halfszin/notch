@@ -1,0 +1,22 @@
+<UserControl x:Class="Orbi.ShelfPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Foreground="White" FontFamily="Segoe UI">
+    <Grid>
+        <StackPanel x:Name="Empty" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets" FontSize="26" Foreground="#666" HorizontalAlignment="Center"/>
+            <TextBlock Text="Arraste arquivos, imagens ou texto para o notch" FontSize="13" Foreground="#AAA" Margin="0,10,0,2" HorizontalAlignment="Center"/>
+            <TextBlock Text="Eles ficam aqui até você arrastar de volta para algum lugar." FontSize="11" Foreground="#666" HorizontalAlignment="Center"/>
+        </StackPanel>
+        <DockPanel x:Name="Filled" Visibility="Collapsed">
+            <DockPanel DockPanel.Dock="Top" Margin="2,0,0,4">
+                <TextBlock x:Name="ClearBtn" DockPanel.Dock="Right" Text="Limpar" FontSize="11" Foreground="#888" Cursor="Hand"
+                           MouseLeftButtonUp="Clear_Click" AutomationProperties.Name="Limpar bandeja"/>
+                <TextBlock x:Name="CountText" FontSize="11" Foreground="#888"/>
+            </DockPanel>
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <WrapPanel x:Name="Items"/>
+            </ScrollViewer>
+        </DockPanel>
+    </Grid>
+</UserControl>

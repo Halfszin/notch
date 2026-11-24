@@ -1,0 +1,6 @@
+<UserControl x:Class="Orbi.SystemPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Foreground="White" FontFamily="Segoe UI">
+    <StackPanel x:Name="Rows" VerticalAlignment="Center" Margin="6,0"/>
+</UserControl>
