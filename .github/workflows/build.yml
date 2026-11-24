@@ -72,6 +72,30 @@ jobs:
             Tab "Notas" "8-notas"
             Tab "Bandeja" "9-bandeja"
           } catch { "UIA: $_" | Out-File ci\uia.txt }
+          # Bug do Alt+Tab: tira o "sempre por cima" do notch e confere se ele volta sozinho.
+          Add-Type @"
+          using System; using System.Runtime.InteropServices; using System.Text;
+          public static class W {
+            public delegate bool CB(IntPtr h, IntPtr l);
+            [DllImport("user32.dll")] public static extern bool EnumWindows(CB cb, IntPtr l);
+            [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+            [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h, int i);
+            [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);
+            public static IntPtr Notch(uint pid) {
+              IntPtr found = IntPtr.Zero;
+              EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p);
+                if (p == pid && (GetWindowLong(h, -20) & 0x80) != 0) found = h; return true; }, IntPtr.Zero);
+              return found;
+            }
+          }
+          "@
+          $h = [W]::Notch([uint32]$p.Id)
+          [W]::SetWindowPos($h, [IntPtr](-2), 0, 0, 0, 0, 0x13) | Out-Null
+          $lost = ([W]::GetWindowLong($h, -20) -band 8) -eq 0
+          Start-Sleep 3
+          $back = ([W]::GetWindowLong($h, -20) -band 8) -ne 0
+          "perdeu=$lost voltou=$back" | Out-File ci\topmost.txt
+          if (-not $back) { "notch não voltou para cima" | Out-File ci\erros.log -Append }
           "vivo=$(-not $p.HasExited)" | Out-File ci\resultado.txt
           $log = "$env:APPDATA\Orbi\erros.log"
           if (Test-Path $log) { Copy-Item $log ci\erros.log }

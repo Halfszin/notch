@@ -78,6 +78,7 @@ public partial class MainWindow : Window
         NotesView.Box.PreviewMouseLeftButtonDown += (_, _) => AllowKeyboard(true);
         Deactivated += (_, _) =>
         {
+            KeepOnTop();
             AllowKeyboard(false);
             if (!Pill.IsMouseOver) Resize(false);
         };
@@ -104,6 +105,14 @@ public partial class MainWindow : Window
             if (msg == 0x031D) ClipView.Capture(); // WM_CLIPBOARDUPDATE
             return IntPtr.Zero;
         });
+    }
+
+    // O Windows às vezes tira o "sempre por cima" (Alt+Tab, tela cheia, Explorer reiniciando) e o
+    // notch fica atrás das janelas. Reafirma a cada segundo, sem ativar a janela nem roubar o foco.
+    void KeepOnTop()
+    {
+        var h = new WindowInteropHelper(this).Handle;
+        if (h != IntPtr.Zero) SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010); // TOPMOST; NOSIZE|NOMOVE|NOACTIVATE
     }
 
     void AllowKeyboard(bool on)
@@ -370,6 +379,7 @@ public partial class MainWindow : Window
         CalendarView.Refresh();
         SystemView.Update(SafeDeviceName());
         UpdateBattery();
+        KeepOnTop();
         await UpdateMedia();
         ApplyMood();
     }
@@ -403,9 +413,9 @@ public partial class MainWindow : Window
     }
 
     // Arco no sentido horário a partir do topo, centro (9,9), raio 7.5 (anel de 18px).
-    static Geometry RingGeometry(double pct)
+    // c = centro, r = raio. Padrão: anel de 18px do notch. A aba Sistema usa anéis maiores.
+    internal static Geometry RingGeometry(double pct, double c = 9, double r = 7.5)
     {
-        const double c = 9, r = 7.5;
         if (pct >= 0.999) return new EllipseGeometry(new Point(c, c), r, r);
         double a = pct * 2 * Math.PI;
         var fig = new PathFigure { StartPoint = new Point(c, c - r) };
@@ -693,6 +703,7 @@ public partial class MainWindow : Window
     [DllImport("kernel32.dll")] static extern bool GetSystemPowerStatus(out PowerStatus s);
     [DllImport("user32.dll")] static extern bool GetCursorPos(out CursorPoint p);
     [DllImport("user32.dll")] static extern bool AddClipboardFormatListener(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
     [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr h, int i, int v);
 }
