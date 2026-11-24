@@ -44,6 +44,20 @@ jobs:
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($w / 2)), 8
           Start-Sleep 3
           Shot "2-notch-aberto"
+          try {
+            Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+            function Find($name) {
+              $c = New-Object System.Windows.Automation.PropertyCondition ([System.Windows.Automation.AutomationElement]::NameProperty), $name
+              [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $c)
+            }
+            $av = Find "Avatar do Orbi"
+            1..9 | ForEach-Object { $av.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); Start-Sleep -Milliseconds 150 }
+            Start-Sleep 1
+            Shot "3-avatar-cutucado"
+            (Find "Calendário").GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+            Start-Sleep 1
+            Shot "4-calendario"
+          } catch { "UIA: $_" | Out-File ci\uia.txt }
           "vivo=$(-not $p.HasExited)" | Out-File ci\resultado.txt
           $log = "$env:APPDATA\Orbi\erros.log"
           if (Test-Path $log) { Copy-Item $log ci\erros.log }
