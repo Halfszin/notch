@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="NAudio.Core" Version="2.2.1" />
     <Compile Include="../BeatDetector.cs" />
+    <Compile Include="../SpectrumAnalyzer.cs" />
   </ItemGroup>
 </Project>

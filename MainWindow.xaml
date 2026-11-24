@@ -96,7 +96,8 @@
     </Window.Resources>
 
     <Border x:Name="Pill" Background="Black" ClipToBounds="True" Width="120" Height="30"
-            MouseEnter="Pill_MouseEnter" MouseLeave="Pill_MouseLeave">
+            MouseEnter="Pill_MouseEnter" MouseLeave="Pill_MouseLeave"
+            MouseLeftButtonDown="Pill_MouseLeftButtonDown" MouseMove="Pill_MouseMove" MouseLeftButtonUp="Pill_MouseLeftButtonUp">
         <Border.RenderTransform>
             <ScaleTransform x:Name="PillScale"/>
         </Border.RenderTransform>
@@ -116,12 +117,14 @@
                     <Path x:Name="BoltMini" Data="M6,0 L0,6.2 H3.8 L2.8,11 L9,4.6 H5.2 Z" Width="6.5" Height="8" Stretch="Uniform"
  HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
                 </Grid>
-                <StackPanel x:Name="Bars" Orientation="Horizontal" Margin="3,0" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
-                    <Rectangle x:Name="Bar1" Width="3" Height="4" RadiusX="1.5" RadiusY="1.5" Fill="#30D158" Margin="1,0" VerticalAlignment="Center"/>
-                    <Rectangle x:Name="Bar2" Width="3" Height="4" RadiusX="1.5" RadiusY="1.5" Fill="#30D158" Margin="1,0" VerticalAlignment="Center"/>
-                    <Rectangle x:Name="Bar3" Width="3" Height="4" RadiusX="1.5" RadiusY="1.5" Fill="#30D158" Margin="1,0" VerticalAlignment="Center"/>
+                <StackPanel x:Name="Bars" Orientation="Horizontal" Margin="3" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
+                    <Rectangle x:Name="Bar1" Width="3" Height="3" RadiusX="1.5" RadiusY="1.5" Fill="#30D158" Margin="0.5,0" VerticalAlignment="Center"/>
+                    <Rectangle x:Name="Bar2" Width="3" Height="3" RadiusX="1.5" RadiusY="1.5" Fill="#30D158" Margin="0.5,0" VerticalAlignment="Center"/>
+                    <Rectangle x:Name="Bar3" Width="3" Height="3" RadiusX="1.5" RadiusY="1.5" Fill="#30D158" Margin="0.5,0" VerticalAlignment="Center"/>
+                    <Rectangle x:Name="Bar4" Width="3" Height="3" RadiusX="1.5" RadiusY="1.5" Fill="#30D158" Margin="0.5,0" VerticalAlignment="Center"/>
+                    <Rectangle x:Name="Bar5" Width="3" Height="3" RadiusX="1.5" RadiusY="1.5" Fill="#30D158" Margin="0.5,0" VerticalAlignment="Center"/>
                 </StackPanel>
-                <TextBlock x:Name="ClockMini" FontWeight="SemiBold" FontSize="13" Margin="3"
+                <TextBlock x:Name="ClockMini" FontWeight="SemiBold" FontSize="13" Margin="3" TextAlignment="Center"
                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </StackPanel>
 

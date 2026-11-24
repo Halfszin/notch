@@ -12,6 +12,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using NAudio.CoreAudioApi;
+using NAudio.Wave;
 using Windows.Media.Control;
 
 namespace Orbi;
@@ -39,15 +40,28 @@ public partial class MainWindow : Window
     readonly DispatcherTimer _autoClose = new() { Interval = TimeSpan.FromSeconds(7) };
     BeatDetector _beats = new();
     long _lastBounceMs;
+    WasapiLoopbackCapture? _capture;
+    SpectrumAnalyzer? _spectrum;
+    readonly double[] _bands = new double[SpectrumAnalyzer.BandCount];
+    readonly double[] _barLevel = new double[SpectrumAnalyzer.BandCount];
+    double _bassSmooth;
+    System.Windows.Shapes.Rectangle[] _barRects = null!;
+    Point? _dragFrom;
+    bool _dragging;
 
     public string Edge { get; private set; } = "Top";
+    /// <summary>Posição ao longo da borda: 0 = começo (esquerda/cima), 1 = fim.</summary>
+    public double EdgePos { get; private set; } = 0.5;
 
     public MainWindow()
     {
         InitializeComponent();
-        string edge = "Top";
-        try { edge = File.ReadAllText(EdgeFile).Trim(); } catch { }
-        SetEdge(edge, save: false);
+        _barRects = new[] { Bar1, Bar2, Bar3, Bar4, Bar5 };
+        // edge.txt: "Top 0.5" (borda e posição ao longo dela). Arquivo antigo tinha só a borda.
+        string[] saved = { "Top" };
+        try { saved = File.ReadAllText(EdgeFile).Split(' ', StringSplitOptions.RemoveEmptyEntries); } catch { }
+        double pos = saved.Length > 1 && double.TryParse(saved[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : 0.5;
+        SetEdge(saved.FirstOrDefault() ?? "Top", pos, save: false);
         _timer.Tick += async (_, _) => await Tick();
         _beat.Tick += (_, _) => Beat();
         _autoClose.Tick += (_, _) => { _autoClose.Stop(); if (!Pill.IsMouseOver) Resize(false); };
@@ -72,31 +86,84 @@ public partial class MainWindow : Window
 
     // ---------- posição ----------
 
-    public void SetEdge(string edge, bool save = true)
+    public void SetEdge(string edge, double pos = 0.5, bool save = true)
     {
         Edge = edge is "Left" or "Right" ? edge : "Top";
+        EdgePos = double.IsFinite(pos) ? Math.Clamp(pos, 0, 1) : 0.5;
         if (save)
         {
-            try { File.WriteAllText(EdgeFile, Edge); } catch { }
+            try { File.WriteAllText(EdgeFile, $"{Edge} {EdgePos.ToString(CultureInfo.InvariantCulture)}"); } catch { }
         }
         double sw = SystemParameters.PrimaryScreenWidth, sh = SystemParameters.PrimaryScreenHeight;
         Width = WinW;
         Height = WinH;
+        // shortcut: a janela (do tamanho do notch aberto) não sai da tela, então o notch para a ~230 px
+        // dos cantos; para encostar no canto, deslocar o notch dentro da janela.
+        double x = Math.Clamp(EdgePos * sw - WinW / 2, 0, sw - WinW), y = Math.Clamp(EdgePos * sh - WinH / 2, 0, sh - WinH);
         Mini.Orientation = Edge == "Top" ? Orientation.Horizontal : Orientation.Vertical;
         (Left, Top, Pill.HorizontalAlignment, Pill.VerticalAlignment, Pill.CornerRadius, Pill.RenderTransformOrigin) = Edge switch
         {
-            "Left" => (0.0, (sh - WinH) / 2, HorizontalAlignment.Left, VerticalAlignment.Center, new CornerRadius(0, 20, 20, 0), new Point(0, 0.5)),
-            "Right" => (sw - WinW, (sh - WinH) / 2, HorizontalAlignment.Right, VerticalAlignment.Center, new CornerRadius(20, 0, 0, 20), new Point(1, 0.5)),
-            _ => ((sw - WinW) / 2, 0.0, HorizontalAlignment.Center, VerticalAlignment.Top, new CornerRadius(0, 0, 20, 20), new Point(0.5, 0)),
+            "Left" => (0.0, y, HorizontalAlignment.Left, VerticalAlignment.Center, new CornerRadius(0, 16, 16, 0), new Point(0, 0.5)),
+            "Right" => (sw - WinW, y, HorizontalAlignment.Right, VerticalAlignment.Center, new CornerRadius(16, 0, 0, 16), new Point(1, 0.5)),
+            _ => (x, 0.0, HorizontalAlignment.Center, VerticalAlignment.Top, new CornerRadius(0, 0, 20, 20), new Point(0.5, 0)),
         };
+        ShowMiniClock();
         Resize(false, animate: false);
+    }
+
+    // Nas laterais a hora fica em pé ("19" em cima de "54"): o notch fica fino.
+    void ShowMiniClock()
+    {
+        string t = CalendarView.RunningText ?? DateTime.Now.ToString("HH:mm");
+        ClockMini.Text = Edge == "Top" ? t : t.Replace(":", "\n");
+    }
+
+    // ---------- arrastar o notch pelas bordas ----------
+    // Segura e arrasta (pelo fundo do notch aberto): ele corre pela borda e pula para a borda
+    // (topo, esquerda, direita) mais perto do cursor.
+
+    void Pill_MouseLeftButtonDown(object s, MouseButtonEventArgs e)
+    {
+        _dragFrom = CursorDip();
+        Pill.CaptureMouse();
+    }
+
+    void Pill_MouseMove(object s, MouseEventArgs e)
+    {
+        if (_dragFrom is not Point from || e.LeftButton != MouseButtonState.Pressed) return;
+        var p = CursorDip();
+        if (!_dragging && (p - from).Length < 8) return; // clique normal não arrasta
+        if (!_dragging)
+        {
+            _dragging = true;
+            Resize(false);
+        }
+        double sw = SystemParameters.PrimaryScreenWidth, sh = SystemParameters.PrimaryScreenHeight;
+        string edge = p.Y < Math.Min(p.X, sw - p.X) ? "Top" : p.X < sw - p.X ? "Left" : "Right";
+        SetEdge(edge, edge == "Top" ? p.X / sw : p.Y / sh, save: false);
+    }
+
+    void Pill_MouseLeftButtonUp(object s, MouseButtonEventArgs e)
+    {
+        Pill.ReleaseMouseCapture();
+        _dragFrom = null;
+        if (!_dragging) return;
+        _dragging = false;
+        SetEdge(Edge, EdgePos); // salva onde soltou
+    }
+
+    Point CursorDip()
+    {
+        GetCursorPos(out var pt);
+        var toDip = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
+        return toDip.Transform(new Point(pt.X, pt.Y));
     }
 
     void Resize(bool open, bool animate = true)
     {
         _open = open;
         bool side = Edge != "Top";
-        double w = open ? FullW : side ? 44 : 120, h = open ? FullH : side ? 80 : 30;
+        double w = open ? FullW : side ? 32 : 120, h = open ? FullH : side ? 100 : 30;
         var d = TimeSpan.FromMilliseconds(animate ? (open ? 340 : 220) : 0);
         // Abrir com um leve "pulo" (estilo ilha dinâmica); fechar direto.
         IEasingFunction ease = open
@@ -120,7 +187,7 @@ public partial class MainWindow : Window
     void Pill_MouseEnter(object s, MouseEventArgs e)
     {
         _autoClose.Stop();
-        if (_open) return;
+        if (_open || _dragging) return;
         bool wasAsleep = DateTime.Now - _lastSeen > SleepAfter;
         _lastSeen = DateTime.Now;
         Resize(true);
@@ -208,7 +275,7 @@ public partial class MainWindow : Window
         var now = DateTime.Now;
         ClockFull.Text = now.ToString("HH:mm");
         // Com o timer correndo, o notch fechado mostra o tempo que falta no lugar da hora.
-        ClockMini.Text = CalendarView.RunningText ?? ClockFull.Text;
+        ShowMiniClock();
         DateText.Text = now.ToString("ddd dd MMM yyyy", PtBr).Replace(".", "");
         CalendarView.Refresh();
         UpdateBattery();
@@ -343,49 +410,110 @@ public partial class MainWindow : Window
         if (playing == _playing) return;
         _playing = playing;
         Bars.Visibility = playing ? Visibility.Visible : Visibility.Collapsed;
-        if (playing) _beat.Start();
+        if (playing)
+        {
+            StartCapture();
+            _beat.Start();
+        }
         else
         {
             _beat.Stop();
+            StopCapture();
             _beats = new BeatDetector();
-            ApplyLevel(0, 0);
+            _bassSmooth = 0;
+            Array.Clear(_barLevel);
+            ApplyLevel(0);
         }
+    }
+
+    // Escuta o som que sai do PC (loopback do WASAPI), como o Wallpaper Engine. Só roda enquanto toca.
+    void StartCapture()
+    {
+        try
+        {
+            var capture = new WasapiLoopbackCapture();
+            var fmt = capture.WaveFormat;
+            var spectrum = new SpectrumAnalyzer(fmt.SampleRate);
+            int channels = fmt.Channels, bytes = fmt.BitsPerSample / 8;
+            var mono = new float[4096];
+            capture.DataAvailable += (_, a) =>
+            {
+                // shortcut: só lê 32 bits (float, o padrão do Windows) e 16 bits; outros formatos ficam sem visualizador.
+                if (bytes != 4 && bytes != 2) return;
+                int frames = a.BytesRecorded / (bytes * channels);
+                if (mono.Length < frames) mono = new float[frames];
+                for (int f = 0; f < frames; f++)
+                {
+                    float sum = 0;
+                    for (int c = 0; c < channels; c++)
+                    {
+                        int at = (f * channels + c) * bytes;
+                        sum += bytes == 4 ? BitConverter.ToSingle(a.Buffer, at) : BitConverter.ToInt16(a.Buffer, at) / 32768f;
+                    }
+                    mono[f] = sum / channels;
+                }
+                spectrum.Add(mono.AsSpan(0, frames));
+            };
+            capture.StartRecording();
+            _capture = capture;
+            _spectrum = spectrum;
+        }
+        catch { StopCapture(); } // sem loopback: Beat() volta a usar o medidor de volume
+    }
+
+    void StopCapture()
+    {
+        try { _capture?.StopRecording(); _capture?.Dispose(); } catch { }
+        _capture = null;
+        _spectrum = null;
     }
 
     void Beat()
     {
-        float peak = 0;
-        try
+        double bass;
+        if (_spectrum is { } spectrum)
         {
-            peak = _spotifyMeters.Count > 0
-                ? _spotifyMeters.Max(m => m.MasterPeakValue)
-                : _audioDevice?.AudioMeterInformation.MasterPeakValue ?? 0;
+            bass = spectrum.ReadBass();
+            spectrum.ReadBands(_bands);
         }
-        catch { }
+        else
+        {
+            float peak = 0;
+            try
+            {
+                peak = _spotifyMeters.Count > 0
+                    ? _spotifyMeters.Max(m => m.MasterPeakValue)
+                    : _audioDevice?.AudioMeterInformation.MasterPeakValue ?? 0;
+            }
+            catch { }
+            bass = peak;
+            Array.Fill(_bands, peak);
+        }
         long now = Environment.TickCount64;
-        double pulse = _beats.Process(peak, now);
+        double pulse = _beats.Process(bass, now);
         // Batida forte com o notch aberto: o avatar dá um pulinho (no máximo ~2 por segundo).
         if (_beats.LastWasBeat && pulse > 0.85 && _open && now - _lastBounceMs > 450)
         {
             _lastBounceMs = now;
             Avatar.Poke("bounce");
         }
-        ApplyLevel(pulse, peak);
+        // Sobe rápido e desce suave, como os visualizadores do Wallpaper Engine.
+        _bassSmooth = bass > _bassSmooth ? _bassSmooth + (bass - _bassSmooth) * 0.6 : _bassSmooth * 0.9;
+        for (int i = 0; i < _barLevel.Length; i++)
+            _barLevel[i] = _bands[i] > _barLevel[i] ? _barLevel[i] + (_bands[i] - _barLevel[i]) * 0.6 : _barLevel[i] * 0.85;
+        ApplyLevel(pulse);
     }
 
-    // pulse: salta em cada batida e some rápido. peak: volume do momento (só para as barrinhas não pararem).
-    void ApplyLevel(double pulse, double peak)
+    // Graves (contínuo) + batida (salto): o avatar acompanha o grave o tempo todo e dá um tranco no bumbo.
+    void ApplyLevel(double pulse)
     {
-        double t = Environment.TickCount64 / 1000.0;
-        AvatarScale.ScaleX = AvatarScale.ScaleY = 1 + 0.16 * pulse;
-        GlowScale.ScaleX = GlowScale.ScaleY = 1 + 0.45 * pulse;
-        Glow.Opacity = 0.45 + 0.55 * pulse;
-        // Notch fechado pulsa na batida; aberto fica parado para não atrapalhar os botões.
-        PillScale.ScaleX = PillScale.ScaleY = _open ? 1 : 1 + 0.08 * pulse;
-        double bed = peak * 0.35;
-        Bar1.Height = 3 + 11 * Math.Max(pulse * 0.75, bed * (0.6 + 0.4 * Math.Sin(t * 11)));
-        Bar2.Height = 3 + 11 * Math.Max(pulse, bed);
-        Bar3.Height = 3 + 11 * Math.Max(pulse * 0.6, bed * (0.6 + 0.4 * Math.Sin(t * 8 + 1.7)));
+        double bass = _bassSmooth;
+        AvatarScale.ScaleX = AvatarScale.ScaleY = 1 + 0.10 * bass + 0.08 * pulse;
+        GlowScale.ScaleX = GlowScale.ScaleY = 1 + 0.30 * bass + 0.25 * pulse;
+        Glow.Opacity = 0.4 + 0.6 * Math.Max(bass, pulse);
+        // Notch fechado pulsa; aberto fica parado para não atrapalhar os botões.
+        PillScale.ScaleX = PillScale.ScaleY = _open ? 1 : 1 + 0.04 * bass + 0.05 * pulse;
+        for (int i = 0; i < _barRects.Length; i++) _barRects[i].Height = 3 + 11 * _barLevel[i];
     }
 
     // ---------- volume ----------
@@ -451,7 +579,11 @@ public partial class MainWindow : Window
     [StructLayout(LayoutKind.Sequential)]
     struct PowerStatus { public byte AC, Flag, Percent, Saver; public int Life, FullLife; }
 
+    [StructLayout(LayoutKind.Sequential)]
+    struct CursorPoint { public int X, Y; }
+
     [DllImport("kernel32.dll")] static extern bool GetSystemPowerStatus(out PowerStatus s);
+    [DllImport("user32.dll")] static extern bool GetCursorPos(out CursorPoint p);
     [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
     [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr h, int i, int v);
 }

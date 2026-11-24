@@ -65,6 +65,14 @@ jobs:
           $log = "$env:APPDATA\Orbi\erros.log"
           if (Test-Path $log) { Copy-Item $log ci\erros.log }
           if (-not $p.HasExited) { Stop-Process $p -Force }
+          # Notch na lateral esquerda: hora em pé, notch fino.
+          Set-Content "$env:APPDATA\Orbi\edge.txt" "Left 0.5"
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 900, 700
+          $p2 = Start-Process publish\Orbi.exe -ArgumentList "--startup" -PassThru
+          Start-Sleep 10
+          Shot "5-lateral"
+          if (Test-Path $log) { Copy-Item $log ci\erros.log -Force }
+          if (-not $p2.HasExited) { Stop-Process $p2 -Force }
 
       - name: Guardar o resultado do teste no branch ci-results
         shell: bash
