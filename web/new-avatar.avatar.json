@@ -1,0 +1,54 @@
+{
+  "name": "New avatar",
+  "body": {
+    "primary": {
+      "type": "sphere",
+      "width": 240,
+      "height": 240,
+      "depth": 240,
+      "roundness": 1
+    },
+    "nodes": []
+  },
+  "colors": {
+    "body": "#ffffff",
+    "eyes": "#111316"
+  },
+  "style": {
+    "outline": {
+      "enabled": false,
+      "color": "#111316",
+      "width": 6,
+      "opacity": 1
+    }
+  },
+  "face": {
+    "eyes": {
+      "width": 0.6,
+      "height": 0.6,
+      "gap": 1,
+      "shiftY": -0.05
+    },
+    "nose": {
+      "enabled": false,
+      "shape": "inverted-triangle",
+      "roundness": 50,
+      "width": 10,
+      "height": 11,
+      "x": 0,
+      "y": 10,
+      "angle": 0
+    },
+    "mouth": {
+      "enabled": true,
+      "shape": "curve",
+      "curve": 45,
+      "width": 20,
+      "height": 6,
+      "x": 0,
+      "y": 35,
+      "angle": 0
+    },
+    "perspective": 1
+  }
+}

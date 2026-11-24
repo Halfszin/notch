@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "scripts": { "build": "esbuild entry.js --bundle --minify --format=iife --global-name=AvatarWeb --outfile=avatar.bundle.js" },
+  "dependencies": { "@bible-strong/avatar-web": "1.2.1" },
+  "devDependencies": { "esbuild": "0.24.0" }
+}

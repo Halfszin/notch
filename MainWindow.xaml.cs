@@ -17,25 +17,30 @@ namespace Notch;
 
 public partial class MainWindow : Window
 {
-    const double FullW = 360, FullH = 170;
-    static readonly string EdgeFile = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Notch", "edge.txt");
+    const double FullW = 420, FullH = 200;
+    // Folga em volta do notch aberto para a animação com "mola" passar um pouco do tamanho final sem cortar.
+    const double WinW = FullW + 24, WinH = FullH + 16;
+    static readonly string EdgeFile = System.IO.Path.Combine(App.Dir, "edge.txt");
     static readonly CultureInfo PtBr = new("pt-BR");
     static readonly Brush Green = new SolidColorBrush(Color.FromRgb(0x30, 0xD1, 0x58));
     static readonly Brush Red = new SolidColorBrush(Color.FromRgb(0xFF, 0x45, 0x3A));
 
-    string _edge = "Top";
     bool _open, _syncingVolume;
     string? _coverKey;
     GlobalSystemMediaTransportControlsSessionManager? _media;
     GlobalSystemMediaTransportControlsSession? _session;
+    MMDevice? _audioDevice;
+    readonly List<SimpleAudioVolume> _spotifyVolumes = new();
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
+
+    public string Edge { get; private set; } = "Top";
 
     public MainWindow()
     {
         InitializeComponent();
-        try { _edge = File.ReadAllText(EdgeFile).Trim(); } catch { }
-        ApplyEdge();
+        string edge = "Top";
+        try { edge = File.ReadAllText(EdgeFile).Trim(); } catch { }
+        SetEdge(edge, save: false);
         _timer.Tick += async (_, _) => await Tick();
         Loaded += async (_, _) =>
         {
@@ -55,16 +60,22 @@ public partial class MainWindow : Window
 
     // ---------- posição ----------
 
-    void ApplyEdge()
+    public void SetEdge(string edge, bool save = true)
     {
-        if (_edge != "Left" && _edge != "Right") _edge = "Top";
-        double sw = SystemParameters.PrimaryScreenWidth, sh = SystemParameters.PrimaryScreenHeight;
-        Mini.Orientation = _edge == "Top" ? Orientation.Horizontal : Orientation.Vertical;
-        (Left, Top, Pill.HorizontalAlignment, Pill.VerticalAlignment, Pill.CornerRadius) = _edge switch
+        Edge = edge is "Left" or "Right" ? edge : "Top";
+        if (save)
         {
-            "Left" => (0.0, (sh - FullH) / 2, HorizontalAlignment.Left, VerticalAlignment.Center, new CornerRadius(0, 16, 16, 0)),
-            "Right" => (sw - FullW, (sh - FullH) / 2, HorizontalAlignment.Right, VerticalAlignment.Center, new CornerRadius(16, 0, 0, 16)),
-            _ => ((sw - FullW) / 2, 0.0, HorizontalAlignment.Center, VerticalAlignment.Top, new CornerRadius(0, 0, 16, 16)),
+            try { File.WriteAllText(EdgeFile, Edge); } catch { }
+        }
+        double sw = SystemParameters.PrimaryScreenWidth, sh = SystemParameters.PrimaryScreenHeight;
+        Width = WinW;
+        Height = WinH;
+        Mini.Orientation = Edge == "Top" ? Orientation.Horizontal : Orientation.Vertical;
+        (Left, Top, Pill.HorizontalAlignment, Pill.VerticalAlignment, Pill.CornerRadius) = Edge switch
+        {
+            "Left" => (0.0, (sh - WinH) / 2, HorizontalAlignment.Left, VerticalAlignment.Center, new CornerRadius(0, 20, 20, 0)),
+            "Right" => (sw - WinW, (sh - WinH) / 2, HorizontalAlignment.Right, VerticalAlignment.Center, new CornerRadius(20, 0, 0, 20)),
+            _ => ((sw - WinW) / 2, 0.0, HorizontalAlignment.Center, VerticalAlignment.Top, new CornerRadius(0, 0, 20, 20)),
         };
         Resize(false, animate: false);
     }
@@ -72,33 +83,47 @@ public partial class MainWindow : Window
     void Resize(bool open, bool animate = true)
     {
         _open = open;
-        bool side = _edge != "Top";
-        double w = open ? FullW : side ? 44 : 120, h = open ? FullH : side ? 78 : 30;
-        Mini.Visibility = open ? Visibility.Collapsed : Visibility.Visible;
-        Full.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
-        var d = TimeSpan.FromMilliseconds(animate ? 180 : 0);
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        bool side = Edge != "Top";
+        double w = open ? FullW : side ? 44 : 120, h = open ? FullH : side ? 80 : 30;
+        var d = TimeSpan.FromMilliseconds(animate ? (open ? 340 : 220) : 0);
+        // Abrir com um leve "pulo" (estilo ilha dinâmica); fechar direto.
+        IEasingFunction ease = open
+            ? new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.25 }
+            : new CubicEase { EasingMode = EasingMode.EaseOut };
         Pill.BeginAnimation(WidthProperty, new DoubleAnimation(w, d) { EasingFunction = ease });
         Pill.BeginAnimation(HeightProperty, new DoubleAnimation(h, d) { EasingFunction = ease });
+        Fade(Full, open ? 1 : 0, animate ? (open ? 220 : 90) : 0, open && animate ? 100 : 0);
+        Fade(Mini, open ? 0 : 1, animate ? 140 : 0, !open && animate ? 120 : 0);
+        Full.IsHitTestVisible = open;
+        if (open) Avatar.Resume(); else Avatar.Pause();
     }
 
-    void Pill_MouseEnter(object s, MouseEventArgs e) { Resize(true); _ = UpdateMedia(); }
-    void Pill_MouseLeave(object s, MouseEventArgs e) { if (!Pill.ContextMenu.IsOpen) Resize(false); }
-    void Menu_Closed(object s, RoutedEventArgs e) { if (!Pill.IsMouseOver) Resize(false); }
-
-    void Edge_Click(object s, RoutedEventArgs e)
-    {
-        _edge = (string)((MenuItem)s).Tag;
-        try
+    static void Fade(UIElement el, double to, double ms, double delayMs) =>
+        el.BeginAnimation(OpacityProperty, new DoubleAnimation(to, TimeSpan.FromMilliseconds(ms))
         {
-            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(EdgeFile)!);
-            File.WriteAllText(EdgeFile, _edge);
-        }
-        catch { }
-        ApplyEdge();
+            BeginTime = TimeSpan.FromMilliseconds(delayMs),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        });
+
+    void Pill_MouseEnter(object s, MouseEventArgs e)
+    {
+        if (_open) return;
+        Resize(true);
+        _ = UpdateMedia();
     }
 
-    void Exit_Click(object s, RoutedEventArgs e) => Close();
+    void Pill_MouseLeave(object s, MouseEventArgs e)
+    {
+        if (!Pill.ContextMenu.IsOpen && !VolSlider.IsMouseCaptureWithin) Resize(false);
+    }
+
+    void Menu_Closed(object s, RoutedEventArgs e)
+    {
+        if (!Pill.IsMouseOver) Resize(false);
+    }
+
+    void Settings_Click(object s, RoutedEventArgs e) => App.OpenSettings();
+    void Exit_Click(object s, RoutedEventArgs e) => Application.Current.Shutdown();
 
     // ---------- relógio + bateria ----------
 
@@ -115,17 +140,19 @@ public partial class MainWindow : Window
     {
         GetSystemPowerStatus(out var p);
         bool none = p.Percent > 100; // 255 = PC sem bateria
+        bool charging = !none && p.AC == 1;
         double pct = none ? 1 : p.Percent / 100.0;
-        var geo = RingGeometry(pct);
-        RingMini.Data = RingFull.Data = geo;
-        RingMini.Stroke = RingFull.Stroke = none ? Brushes.Gray : pct <= 0.2 ? Red : Green;
-        BatteryText.Text = none ? "" : $"{p.Percent}%{(p.AC == 1 ? " ⚡" : "")}";
+        var brush = none ? Brushes.Gray : pct <= 0.2 && !charging ? Red : Green;
+        RingMini.Data = RingFull.Data = RingGeometry(pct);
+        RingMini.Stroke = RingFull.Stroke = BoltMini.Foreground = BoltFull.Foreground = brush;
+        BoltMini.Visibility = BoltFull.Visibility = charging ? Visibility.Visible : Visibility.Collapsed;
+        BatteryText.Text = none ? "" : $"{p.Percent}%";
     }
 
-    // Arco no sentido horário a partir do topo, centro (8,8), raio 6.5 (anel de 16px).
+    // Arco no sentido horário a partir do topo, centro (9,9), raio 7.5 (anel de 18px).
     static Geometry RingGeometry(double pct)
     {
-        const double c = 8, r = 6.5;
+        const double c = 9, r = 7.5;
         if (pct >= 0.999) return new EllipseGeometry(new Point(c, c), r, r);
         double a = pct * 2 * Math.PI;
         var fig = new PathFigure { StartPoint = new Point(c, c - r) };
@@ -153,6 +180,7 @@ public partial class MainWindow : Window
             TitleText.Text = string.IsNullOrEmpty(props.Title) ? "Nada tocando" : props.Title;
             ArtistText.Text = props.Artist;
             PlayBtn.Content = playing ? "" : "";
+            Avatar.SetState(playing ? "humming" : "idle");
 
             var len = tl.EndTime - tl.StartTime;
             var pos = tl.Position + (playing ? DateTimeOffset.Now - tl.LastUpdatedTime : TimeSpan.Zero);
@@ -179,6 +207,7 @@ public partial class MainWindow : Window
         PlayBtn.Content = "";
         CoverBox.Background = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x22));
         CoverIcon.Visibility = Visibility.Visible;
+        Avatar.SetState("idle");
         _coverKey = null;
     }
 
@@ -218,24 +247,18 @@ public partial class MainWindow : Window
     }
 
     // ---------- volume ----------
+    // As sessões de áudio do Spotify são procuradas só a cada segundo (no Tick). Arrastar a barra
+    // apenas grava o valor nelas, sem varrer processos a cada movimento (era isso que travava).
 
-    // Lê/ajusta o volume do Spotify no mixer do Windows; sem Spotify tocando som, usa o volume geral.
-    static float Volume(float? set = null)
+    void RefreshAudio()
     {
+        _audioDevice?.Dispose();
+        _spotifyVolumes.Clear();
         using var en = new MMDeviceEnumerator();
-        using var dev = en.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-        var sessions = dev.AudioSessionManager.Sessions;
-        float? found = null;
+        _audioDevice = en.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+        var sessions = _audioDevice.AudioSessionManager.Sessions;
         for (int i = 0; i < sessions.Count; i++)
-        {
-            var sess = sessions[i];
-            if (!IsSpotify(sess.GetProcessID)) continue;
-            if (set is float v) sess.SimpleAudioVolume.Volume = v;
-            found = sess.SimpleAudioVolume.Volume;
-        }
-        if (found is float f) return f;
-        if (set is float m) dev.AudioEndpointVolume.MasterVolumeLevelScalar = m;
-        return dev.AudioEndpointVolume.MasterVolumeLevelScalar;
+            if (IsSpotify(sessions[i].GetProcessID)) _spotifyVolumes.Add(sessions[i].SimpleAudioVolume);
     }
 
     static bool IsSpotify(uint pid)
@@ -247,15 +270,29 @@ public partial class MainWindow : Window
     void UpdateVolumeSlider()
     {
         if (VolSlider.IsMouseCaptureWithin) return;
-        try { _syncingVolume = true; VolSlider.Value = Volume(); }
+        try
+        {
+            RefreshAudio();
+            _syncingVolume = true;
+            // Spotify tocando som: volume dele no mixer. Senão: volume geral.
+            VolSlider.Value = _spotifyVolumes.Count > 0
+                ? _spotifyVolumes[0].Volume
+                : _audioDevice!.AudioEndpointVolume.MasterVolumeLevelScalar;
+        }
         catch { }
         finally { _syncingVolume = false; }
     }
 
     void Vol_Changed(object s, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (_syncingVolume || !IsLoaded) return;
-        try { Volume((float)e.NewValue); } catch { }
+        if (_syncingVolume || _audioDevice == null) return;
+        float v = (float)e.NewValue;
+        try
+        {
+            if (_spotifyVolumes.Count > 0) foreach (var sv in _spotifyVolumes) sv.Volume = v;
+            else _audioDevice.AudioEndpointVolume.MasterVolumeLevelScalar = v;
+        }
+        catch { }
     }
 
     // ---------- Win32 ----------
