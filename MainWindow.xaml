@@ -38,7 +38,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="b" Background="Transparent" CornerRadius="14" Padding="11,6">
+                        <Border x:Name="b" Background="Transparent" CornerRadius="14" Padding="9,6">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -132,7 +132,7 @@
             <!-- Aviso rápido (fone conectou, carregador, bateria fraca) -->
             <StackPanel x:Name="ToastPanel" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0" IsHitTestVisible="False">
                 <TextBlock x:Name="ToastIcon" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <TextBlock x:Name="ToastText" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="240"/>
+                <TextBlock x:Name="ToastText" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="290"/>
             </StackPanel>
 
             <!-- Aberto -->
@@ -147,17 +147,23 @@
                     <!-- Barra de navegação embaixo -->
                     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,6,0,0">
                         <RadioButton Style="{StaticResource Tab}" Content="&#xE80F;" Tag="home" IsChecked="True" Checked="Tab_Checked"
-                                     ToolTip="Início" AutomationProperties.Name="Início" Margin="3,0"/>
+                                     ToolTip="Início" AutomationProperties.Name="Início" Margin="1,0"/>
                         <RadioButton Style="{StaticResource Tab}" Content="&#xE787;" Tag="calendar" Checked="Tab_Checked"
-                                     ToolTip="Calendário e timer" AutomationProperties.Name="Calendário" Margin="3,0"/>
+                                     ToolTip="Calendário e timer" AutomationProperties.Name="Calendário" Margin="1,0"/>
                         <RadioButton x:Name="TabShelf" Style="{StaticResource Tab}" Content="&#xE896;" Tag="shelf" Checked="Tab_Checked"
-                                     ToolTip="Bandeja de arquivos" AutomationProperties.Name="Bandeja" Margin="3,0"/>
+                                     ToolTip="Bandeja de arquivos" AutomationProperties.Name="Bandeja" Margin="1,0"/>
                         <RadioButton Style="{StaticResource Tab}" Content="&#xE77F;" Tag="clip" Checked="Tab_Checked"
-                                     ToolTip="Área de transferência" AutomationProperties.Name="Área de transferência" Margin="3,0"/>
+                                     ToolTip="Área de transferência" AutomationProperties.Name="Área de transferência" Margin="1,0"/>
                         <RadioButton Style="{StaticResource Tab}" Content="&#xE70B;" Tag="notes" Checked="Tab_Checked"
-                                     ToolTip="Notas rápidas" AutomationProperties.Name="Notas" Margin="3,0"/>
+                                     ToolTip="Notas rápidas" AutomationProperties.Name="Notas" Margin="1,0"/>
                         <RadioButton Style="{StaticResource Tab}" Content="&#xE9D9;" Tag="system" Checked="Tab_Checked"
-                                     ToolTip="Sistema" AutomationProperties.Name="Sistema" Margin="3,0"/>
+                                     ToolTip="Sistema" AutomationProperties.Name="Sistema" Margin="1,0"/>
+                        <RadioButton Style="{StaticResource Tab}" Content="&#xE762;" Tag="todo" Checked="Tab_Checked"
+                                     ToolTip="Tarefas e lembretes" AutomationProperties.Name="Tarefas" Margin="1,0"/>
+                        <RadioButton Style="{StaticResource Tab}" Content="&#xE71D;" Tag="shortcuts" Checked="Tab_Checked"
+                                     ToolTip="Atalhos" AutomationProperties.Name="Atalhos" Margin="1,0"/>
+                        <RadioButton Style="{StaticResource Tab}" Content="&#xE99A;" Tag="ai" Checked="Tab_Checked"
+                                     ToolTip="Inteligência artificial" AutomationProperties.Name="IA" Margin="1,0"/>
                     </StackPanel>
 
                     <DockPanel>
@@ -168,6 +174,8 @@
                                      Margin="0,4,6,0" IsHitTestVisible="False" Visibility="Collapsed" ToolTip="Versão nova pronta"/>
                         </Grid>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="8,0,0,0">
+                            <TextBlock x:Name="WeatherText" FontSize="12" Margin="0,0,12,0" VerticalAlignment="Center" Visibility="Collapsed"
+                                       FontFamily="Segoe UI Symbol, Segoe UI"/>
                             <Grid Width="18" Height="18" Margin="0,0,5,0">
                                 <Ellipse Stroke="#2E2E31" StrokeThickness="2.5" Margin="1.5"/>
                                 <Path x:Name="RingFull" StrokeThickness="2.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
@@ -187,6 +195,9 @@
                         <local:ClipboardPage x:Name="ClipView" Visibility="Collapsed"/>
                         <local:NotesPage x:Name="NotesView" Visibility="Collapsed"/>
                         <local:SystemPage x:Name="SystemView" Visibility="Collapsed"/>
+                        <local:TodoPage x:Name="TodoView" Visibility="Collapsed"/>
+                        <local:ShortcutsPage x:Name="ShortcutsView" Visibility="Collapsed"/>
+                        <local:AiPage x:Name="AiView" Visibility="Collapsed"/>
                         <Grid x:Name="HomePage">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>

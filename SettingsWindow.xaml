@@ -182,6 +182,53 @@
                         </Grid>
                     </Border>
 
+                    <TextBlock Text="CLIMA" Style="{StaticResource Label}"/>
+                    <Border Style="{StaticResource Card}">
+                        <Grid Style="{StaticResource Row}">
+                            <StackPanel Margin="0,0,300,0">
+                                <TextBlock Text="Cidade" Style="{StaticResource RowTitle}"/>
+                                <TextBlock x:Name="CityStatus" Style="{StaticResource RowSub}"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Border Background="#232326" CornerRadius="8" Padding="8,5" Width="190" Margin="0,0,8,0">
+                                    <TextBox x:Name="CityInput" Background="Transparent" Foreground="White" CaretBrush="White" BorderThickness="0" FontSize="13" AutomationProperties.Name="Cidade"/>
+                                </Border>
+                                <Button Content="Salvar" Style="{StaticResource PillBtn}" Click="SaveCity_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Text="INTELIGÊNCIA ARTIFICIAL" Style="{StaticResource Label}"/>
+                    <Border Style="{StaticResource Card}">
+                        <Grid Style="{StaticResource Row}">
+                            <StackPanel Margin="0,0,300,0">
+                                <TextBlock Text="Chave da API do Claude" Style="{StaticResource RowTitle}"/>
+                                <TextBlock x:Name="KeyStatus" Style="{StaticResource RowSub}"/>
+                                <TextBlock Style="{StaticResource RowSub}">
+                                    <Hyperlink NavigateUri="https://console.anthropic.com/settings/keys" RequestNavigate="Link_RequestNavigate" Foreground="#0A84FF">Criar uma chave no Console da Anthropic</Hyperlink>
+                                </TextBlock>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Border Background="#232326" CornerRadius="8" Padding="8,5" Width="190" Margin="0,0,8,0">
+                                    <PasswordBox x:Name="KeyInput" Background="Transparent" Foreground="White" CaretBrush="White" BorderThickness="0" FontSize="13" AutomationProperties.Name="Chave da API"/>
+                                </Border>
+                                <Button Content="Salvar" Style="{StaticResource PillBtn}" Click="SaveKey_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Text="NOTIFICAÇÕES" Style="{StaticResource Label}"/>
+                    <Border Style="{StaticResource Card}">
+                        <Grid Style="{StaticResource Row}">
+                            <StackPanel Margin="0,0,80,0">
+                                <TextBlock Text="WhatsApp e Discord no notch" Style="{StaticResource RowTitle}"/>
+                                <TextBlock Text="Mostra as mensagens que chegam, lendo as notificações do próprio Windows. Nada sai do seu PC." Style="{StaticResource RowSub}"/>
+                            </StackPanel>
+                            <CheckBox x:Name="NotifSwitch" Style="{StaticResource Switch}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                      AutomationProperties.Name="Notificações do WhatsApp e Discord" Click="Notif_Click"/>
+                        </Grid>
+                    </Border>
+
                     <TextBlock Text="ATUALIZAÇÕES" Style="{StaticResource Label}"/>
                     <Border Style="{StaticResource Card}">
                         <Grid Style="{StaticResource Row}">

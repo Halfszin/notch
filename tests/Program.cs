@@ -68,5 +68,46 @@ Console.WriteLine(string.Join(" ", r.Select(kv => $"{kv.Key}={kv.Value}")));
 bool ok = r["bumbo"] is >= 16 and <= 20 && r["comprimida"] is >= 16 and <= 20 && r["baixinha"] is >= 16 and <= 20
           && r["reta"] <= 3 && r["fade"] <= 3 && r["degrau"] <= 4
           && r["audio-bumbo"] is >= 16 and <= 19 && r["audio-comprimida"] is >= 16 and <= 19 && r["audio-chimbal"] <= 3;
+
+// ---- Tarefas com hora ----
+var now = new DateTime(2026, 11, 24, 14, 0, 0);
+var failures = new List<string>();
+void Check(string input, string title, DateTime? due)
+{
+    var (t, d) = TaskParser.Parse(input, now);
+    if (t != title || d != due) failures.Add($"'{input}' -> '{t}' {d:dd/MM HH:mm} (esperado '{title}' {due:dd/MM HH:mm})");
+}
+Check("Ligar pro João às 15:30", "Ligar pro João", now.Date.AddHours(15.5));
+Check("reunião 9h", "reunião", now.Date.AddDays(1).AddHours(9));            // 9h já passou hoje -> amanhã
+Check("reunião amanhã 9h30", "reunião", now.Date.AddDays(1).AddHours(9.5));
+Check("academia 18h", "academia", now.Date.AddHours(18));
+Check("tirar o bolo em 20 min", "tirar o bolo", now.AddMinutes(20));
+Check("pagar boleto amanhã", "pagar boleto", now.Date.AddDays(1).AddHours(9));
+Check("comprar pão", "comprar pão", null);
+Check("ver episódio 12", "ver episódio 12", null);                      // número solto não é hora
+Check("código 99:99", "código 99:99", null);
+// ---- Texto das notificações ----
+var (nt, nb) = ToastText.Parse("<toast><visual><binding template='ToastGeneric'><text>Maria</text><text>Chego em 10 min</text></binding></visual></toast>");
+if (nt != "Maria" || nb != "Chego em 10 min") failures.Add($"toast: '{nt}' / '{nb}'");
+if (ToastText.Parse("<isso não é xml").Title != "") failures.Add("toast inválido");
+// ---- Consumo do Claude Code ----
+string L(string ts, string id, int inp, int outp, string model = "claude-opus-5-5") =>
+    $"{{\"type\":\"assistant\",\"timestamp\":\"{ts}\",\"requestId\":\"r{id}\",\"message\":{{\"id\":\"m{id}\",\"model\":\"{model}\",\"usage\":{{\"input_tokens\":{inp},\"output_tokens\":{outp},\"cache_read_input_tokens\":100}}}}}}";
+var todayUtc = now.ToUniversalTime();
+var lines = new[]
+{
+    L(todayUtc.ToString("o"), "1", 10, 20),
+    L(todayUtc.ToString("o"), "1", 10, 20),                         // mesma resposta repetida: conta uma vez
+    L(todayUtc.AddDays(-3).ToString("o"), "2", 5, 5, "claude-sonnet-5-5"),
+    L(todayUtc.AddDays(-30).ToString("o"), "3", 999, 999),          // fora da semana
+    "{\"type\":\"user\",\"message\":{\"role\":\"user\"}}",
+    "{\"cortada\": \"usage\"",                                  // linha pela metade
+};
+var sum = UsageLog.Summarize(lines, now);
+if (sum.TodayMessages != 1 || sum.Today.Total != 130 || sum.WeekMessages != 2 || sum.Week.Total != 240 || sum.WeekByModel.Count != 2)
+    failures.Add($"consumo: hoje {sum.TodayMessages}/{sum.Today.Total} semana {sum.WeekMessages}/{sum.Week.Total} modelos {sum.WeekByModel.Count}");
+
+foreach (var f in failures) Console.WriteLine("FALHA " + f);
+ok &= failures.Count == 0;
 Console.WriteLine(ok ? "OK" : "FALHOU");
 return ok ? 0 : 1;

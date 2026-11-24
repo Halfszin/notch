@@ -1,0 +1,177 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+
+namespace Orbi;
+
+public partial class AiPage : UserControl
+{
+    readonly List<(bool User, string Text)> _history = new();
+    CancellationTokenSource? _pending;
+    long _todayTokens;
+    int _todayQuestions;
+    DateTime _countDay = DateTime.Today;
+
+    /// <summary>true enquanto espera a resposta (o avatar fica "pensando").</summary>
+    public event Action<bool>? Thinking;
+
+    public AiPage()
+    {
+        InitializeComponent();
+        ShowWelcome();
+    }
+
+    void Mode_Checked(object s, RoutedEventArgs e)
+    {
+        if (UsagePanel == null) return; // o XAML marca "Chat" antes de criar os painéis
+        bool usage = UsageMode.IsChecked == true;
+        ChatPanel.Visibility = usage ? Visibility.Collapsed : Visibility.Visible;
+        UsagePanel.Visibility = usage ? Visibility.Visible : Visibility.Collapsed;
+        NewChat.Visibility = usage ? Visibility.Collapsed : Visibility.Visible;
+        if (usage) _ = LoadUsage();
+    }
+
+    // ---------- chat ----------
+
+    void ShowWelcome()
+    {
+        Messages.Children.Clear();
+        Bubble(Config.Current.ApiKey == null
+            ? "Para perguntar, coloque sua chave da API do Claude em Configurações → Inteligência artificial."
+            : "Pergunte qualquer coisa. Eu busco na web quando precisar e respondo curtinho aqui.", false, muted: true);
+    }
+
+    void NewChat_Click(object s, MouseButtonEventArgs e)
+    {
+        _pending?.Cancel();
+        _history.Clear();
+        ShowWelcome();
+    }
+
+    void AskInput_TextChanged(object s, TextChangedEventArgs e) => AskHint.Visibility = AskInput.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    async void AskInput_KeyDown(object s, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || string.IsNullOrWhiteSpace(AskInput.Text) || _pending != null) return;
+        string question = AskInput.Text.Trim();
+        string? key = Config.Current.ApiKey;
+        if (_history.Count == 0) Messages.Children.Clear();
+        AskInput.Clear();
+        Bubble(question, true);
+        if (key == null)
+        {
+            Bubble("Falta a chave da API: Configurações → Inteligência artificial.", false, muted: true);
+            return;
+        }
+        var waiting = Bubble("Pensando…", false, muted: true);
+        _pending = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        Thinking?.Invoke(true);
+        try
+        {
+            // Só as últimas 3 perguntas e respostas vão junto: o chat é para coisas rápidas.
+            var reply = await AiChat.Ask(key, _history.TakeLast(6).ToList(), question, _pending.Token);
+            Messages.Children.Remove(waiting);
+            Bubble(reply.Text, false);
+            _history.Add((true, question));
+            _history.Add((false, reply.Text));
+            if (_countDay != DateTime.Today) { _countDay = DateTime.Today; _todayTokens = 0; _todayQuestions = 0; }
+            _todayTokens += reply.InputTokens + reply.OutputTokens;
+            _todayQuestions++;
+        }
+        catch (OperationCanceledException)
+        {
+            Messages.Children.Remove(waiting);
+        }
+        catch (Exception ex)
+        {
+            Messages.Children.Remove(waiting);
+            Bubble(Friendly(ex), false, muted: true);
+        }
+        finally
+        {
+            _pending = null;
+            Thinking?.Invoke(false);
+        }
+    }
+
+    static string Friendly(Exception ex)
+    {
+        string m = ex.Message;
+        if (m.Contains("401") || m.Contains("authentication", StringComparison.OrdinalIgnoreCase)) return "A chave da API não foi aceita. Confira em Configurações.";
+        if (m.Contains("429") || m.Contains("rate", StringComparison.OrdinalIgnoreCase)) return "Muitas perguntas seguidas. Espere um pouco e tente de novo.";
+        if (m.Contains("credit", StringComparison.OrdinalIgnoreCase) || m.Contains("billing", StringComparison.OrdinalIgnoreCase)) return "Sua conta da API está sem créditos.";
+        return "Não deu para responder agora: " + m;
+    }
+
+    FrameworkElement Bubble(string text, bool user, bool muted = false)
+    {
+        var box = new TextBox
+        {
+            Text = text, IsReadOnly = true, BorderThickness = new Thickness(0), Background = Brushes.Transparent, TextWrapping = TextWrapping.Wrap,
+            Foreground = muted ? Brushes.Gray : Brushes.White, FontSize = 12.5, Padding = new Thickness(0), SelectionBrush = new SolidColorBrush(Color.FromRgb(0x30, 0xD1, 0x58)),
+        };
+        var bubble = new Border
+        {
+            Child = box, CornerRadius = new CornerRadius(10), Padding = new Thickness(9, 5, 9, 5), Margin = new Thickness(user ? 50 : 0, 2, user ? 4 : 30, 2),
+            HorizontalAlignment = user ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+            Background = new SolidColorBrush(user ? Color.FromRgb(0x2C, 0x2C, 0x33) : Color.FromRgb(0x1B, 0x1B, 0x1F)),
+        };
+        Messages.Children.Add(bubble);
+        ChatScroll.ScrollToEnd();
+        return bubble;
+    }
+
+    // ---------- consumo ----------
+
+    async Task LoadUsage()
+    {
+        UsageRows.Children.Clear();
+        Row("Lendo os registros do Claude Code…", "", muted: true);
+        var now = DateTime.Now;
+        UsageLog.Summary? sum = null;
+        string? error = null;
+        await Task.Run(() =>
+        {
+            try { sum = UsageLog.Summarize(UsageLog.RecentFiles(now).SelectMany(ReadShared), now); }
+            catch (Exception ex) { error = ex.Message; }
+        });
+        UsageRows.Children.Clear();
+        Header("Claude Code neste PC");
+        if (sum == null) Row("Não deu para ler os registros", error ?? "", muted: true);
+        else if (sum.WeekMessages == 0) Row("Nenhum uso nos últimos 7 dias", "(sessões na nuvem não ficam neste PC)", muted: true);
+        else
+        {
+            Row("Hoje", $"{Fmt(sum.Today.Total)} tokens · {sum.TodayMessages} respostas");
+            Row("Últimos 7 dias", $"{Fmt(sum.Week.Total)} tokens · {sum.WeekMessages} respostas");
+            Row("  entrada / saída", $"{Fmt(sum.Week.Input)} / {Fmt(sum.Week.Output)}");
+            Row("  cache (lido / gravado)", $"{Fmt(sum.Week.CacheRead)} / {Fmt(sum.Week.CacheWrite)}");
+            foreach (var (model, tokens) in sum.WeekByModel.OrderByDescending(kv => kv.Value).Take(3))
+                Row("  " + model, Fmt(tokens));
+        }
+        Header("Chat do Orbi hoje");
+        Row("Perguntas", _countDay == DateTime.Today ? $"{_todayQuestions} · {Fmt(_todayTokens)} tokens" : "0");
+    }
+
+    // O Claude Code pode estar escrevendo o arquivo agora: abre sem bloquear.
+    static IEnumerable<string> ReadShared(string path)
+    {
+        using var fs = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite | System.IO.FileShare.Delete);
+        using var reader = new System.IO.StreamReader(fs);
+        while (reader.ReadLine() is { } line) yield return line;
+    }
+
+    static string Fmt(long n) => n >= 1_000_000 ? $"{n / 1_000_000.0:0.0} mi" : n >= 1_000 ? $"{n / 1_000.0:0.0} mil" : n.ToString();
+
+    void Header(string text) => UsageRows.Children.Add(new TextBlock { Text = text.ToUpperInvariant(), FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Gray, Margin = new Thickness(0, 6, 0, 3) });
+
+    void Row(string label, string value, bool muted = false)
+    {
+        var row = new DockPanel { Margin = new Thickness(0, 1, 0, 1) };
+        var v = new TextBlock { Text = value, FontSize = 12, Foreground = Brushes.LightGray };
+        DockPanel.SetDock(v, Dock.Right);
+        row.Children.Add(v);
+        row.Children.Add(new TextBlock { Text = label, FontSize = 12, Foreground = muted ? Brushes.Gray : Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis });
+        UsageRows.Children.Add(row);
+    }
+}

@@ -9,5 +9,8 @@
     <PackageReference Include="NAudio.Core" Version="2.2.1" />
     <Compile Include="../BeatDetector.cs" />
     <Compile Include="../SpectrumAnalyzer.cs" />
+    <Compile Include="../TaskParser.cs" />
+    <Compile Include="../ToastText.cs" />
+    <Compile Include="../UsageLog.cs" />
   </ItemGroup>
 </Project>

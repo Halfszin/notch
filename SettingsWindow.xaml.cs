@@ -20,6 +20,10 @@ public partial class SettingsWindow : Window
         Banner.SizeChanged += (_, _) => DrawStars();
         BannerAvatar.Reloaded += ShowAvatarStatus;
         ShowAvatarStatus();
+        CityInput.Text = Config.Current.City ?? "";
+        CityStatus.Text = Config.Current.City == null ? "Escreva sua cidade para ver o clima no notch." : $"Mostrando o clima de {Config.Current.City}.";
+        ShowKeyStatus();
+        NotifSwitch.IsChecked = Config.Current.AppNotifications;
         VersionText.Text = $"Orbi {Updater.Current}";
         Updater.Changed += ShowUpdate;
         Closed += (_, _) => Updater.Changed -= ShowUpdate;
@@ -92,6 +96,64 @@ public partial class SettingsWindow : Window
     }
 
     void Exit_Click(object s, RoutedEventArgs e) => Application.Current.Shutdown();
+
+    async void SaveCity_Click(object s, RoutedEventArgs e)
+    {
+        var cfg = Config.Current;
+        if (string.IsNullOrWhiteSpace(CityInput.Text))
+        {
+            (cfg.City, cfg.Latitude, cfg.Longitude) = (null, null, null);
+            SaveConfig("Clima desligado.", CityStatus);
+            await App.OrbiWindow.RefreshWeather();
+            return;
+        }
+        CityStatus.Text = "Procurando…";
+        try
+        {
+            if (await Weather.FindCity(CityInput.Text) is not { } found) { CityStatus.Text = "Não achei essa cidade. Tente só o nome, ex.: Campinas."; return; }
+            (cfg.City, cfg.Latitude, cfg.Longitude) = (found.Name, found.Lat, found.Lon);
+            CityInput.Text = found.Name;
+            SaveConfig($"Mostrando o clima de {found.Name}.", CityStatus);
+            await App.OrbiWindow.RefreshWeather();
+        }
+        catch (Exception ex) { CityStatus.Text = "Sem conexão para procurar a cidade: " + ex.Message; }
+    }
+
+    void SaveKey_Click(object s, RoutedEventArgs e)
+    {
+        string key = KeyInput.Password.Trim();
+        if (key.Length > 0 && !key.StartsWith("sk-ant-")) { KeyStatus.Text = "Essa não parece uma chave da Anthropic (começa com sk-ant-)."; return; }
+        Config.Current.ApiKey = key.Length == 0 ? null : key;
+        KeyInput.Clear();
+        SaveConfig(null, KeyStatus);
+        ShowKeyStatus();
+    }
+
+    void ShowKeyStatus() => KeyStatus.Text = Config.Current.ApiKey is { } k
+        ? $"Chave salva (…{k[^4..]}), guardada cifrada pela sua conta do Windows. Para trocar, cole outra; para apagar, salve vazio."
+        : "Usada pelo chat da aba IA. Fica guardada cifrada pela sua conta do Windows.";
+
+    void Notif_Click(object s, RoutedEventArgs e)
+    {
+        Config.Current.AppNotifications = NotifSwitch.IsChecked == true;
+        SaveConfig(null, null);
+    }
+
+    static void SaveConfig(string? ok, TextBlock? status)
+    {
+        try
+        {
+            Config.Current.Save();
+            if (ok != null && status != null) status.Text = ok;
+        }
+        catch (Exception ex) { if (status != null) status.Text = "Não salvou: " + ex.Message; }
+    }
+
+    void Link_RequestNavigate(object s, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+        e.Handled = true;
+    }
 
     async Task ReloadAvatars()
     {

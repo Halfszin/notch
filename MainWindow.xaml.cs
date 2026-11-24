@@ -52,6 +52,9 @@ public partial class MainWindow : Window
     readonly MMDeviceEnumerator _deviceEvents = new();
     readonly AudioWatcher _audioWatcher = new();
     int _lowWarnAt = 20;
+    readonly NotificationWatcher _notifications = new();
+    DateTime _weatherAt = DateTime.MinValue;
+    int _tickCount;
 
     public string Edge { get; private set; } = "Top";
     /// <summary>Posição ao longo da borda: 0 = começo (esquerda/cima), 1 = fim.</summary>
@@ -75,7 +78,18 @@ public partial class MainWindow : Window
         try { _deviceEvents.RegisterEndpointNotificationCallback(_audioWatcher); } catch { }
         // Notas: a janela do notch normalmente não pega o teclado (para não roubar o foco); ao clicar
         // nas notas ela passa a aceitar, e volta ao normal quando você clica fora.
-        NotesView.Box.PreviewMouseLeftButtonDown += (_, _) => AllowKeyboard(true);
+        Pill.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            for (var el = e.OriginalSource as DependencyObject; el != null; el = VisualTreeHelper.GetParent(el))
+                if (el is TextBox) { AllowKeyboard(true); return; }
+        };
+        AiView.Thinking += on => { if (on) React("thinking", 120); else React("happy", 2); };
+        _notifications.Received += (app, title, body) =>
+        {
+            var color = new SolidColorBrush(app == "WhatsApp" ? Color.FromRgb(0x25, 0xD3, 0x66) : Color.FromRgb(0x58, 0x65, 0xF2));
+            Toast("\uE8BD", body.Length > 0 ? $"{title}: {body}" : title, color, 5);
+            React("notifying", 2);
+        };
         Deactivated += (_, _) =>
         {
             KeepOnTop();
@@ -125,8 +139,9 @@ public partial class MainWindow : Window
 
     // ---------- avisos rápidos no notch fechado ----------
 
-    public void Toast(string glyph, string text, Brush? color = null)
+    public void Toast(string glyph, string text, Brush? color = null, double seconds = 3.5)
     {
+        _toastTimer.Interval = TimeSpan.FromSeconds(seconds);
         ToastIcon.Text = glyph;
         ToastIcon.Foreground = color ?? Brushes.White;
         ToastText.Text = text;
@@ -258,7 +273,7 @@ public partial class MainWindow : Window
         _open = open;
         bool side = Edge != "Top";
         bool toast = _toasting && !open;
-        double w = open ? FullW : toast ? 300 : side ? 32 : 120, h = open ? FullH : toast ? 36 : side ? 100 : 30;
+        double w = open ? FullW : toast ? 350 : side ? 32 : 120, h = open ? FullH : toast ? 36 : side ? 100 : 30;
         var d = TimeSpan.FromMilliseconds(animate ? (open ? 340 : 220) : 0);
         // Abrir com um leve "pulo" (estilo ilha dinâmica); fechar direto.
         IEasingFunction ease = open
@@ -297,7 +312,7 @@ public partial class MainWindow : Window
     {
         _lastSeen = DateTime.Now;
         // Digitando nas notas o notch fica aberto até você clicar fora.
-        if (!Pill.ContextMenu.IsOpen && !VolSlider.IsMouseCaptureWithin && !NotesView.Box.IsKeyboardFocusWithin) Resize(false);
+        if (!Pill.ContextMenu.IsOpen && !VolSlider.IsMouseCaptureWithin && !(Pill.IsKeyboardFocusWithin && Keyboard.FocusedElement is TextBox)) Resize(false);
     }
 
     void Menu_Closed(object s, RoutedEventArgs e)
@@ -307,10 +322,11 @@ public partial class MainWindow : Window
 
     void Tab_Checked(object s, RoutedEventArgs e)
     {
-        if (SystemView == null) return; // o XAML marca "Início" antes de criar as páginas
+        if (AiView == null) return; // o XAML marca "Início" antes de criar as páginas
         string tag = (string)((RadioButton)s).Tag;
         foreach (var (name, page) in new (string, UIElement)[]
-                 { ("home", HomePage), ("calendar", CalendarView), ("shelf", ShelfView), ("clip", ClipView), ("notes", NotesView), ("system", SystemView) })
+                 { ("home", HomePage), ("calendar", CalendarView), ("shelf", ShelfView), ("clip", ClipView), ("notes", NotesView),
+                   ("system", SystemView), ("todo", TodoView), ("shortcuts", ShortcutsView), ("ai", AiView) })
             page.Visibility = name == tag ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -378,6 +394,14 @@ public partial class MainWindow : Window
         DateText.Text = now.ToString("ddd dd MMM yyyy", PtBr).Replace(".", "");
         CalendarView.Refresh();
         SystemView.Update(SafeDeviceName());
+        foreach (var due in TodoView.TakeDue(now))
+        {
+            SystemSounds.Exclamation.Play();
+            Toast("\uE787", "Lembrete: " + due.Title, new SolidColorBrush(Color.FromRgb(0xFF, 0x9F, 0x0A)), 10);
+            React("notifying", 6);
+        }
+        if (Config.Current.AppNotifications && ++_tickCount % 2 == 0) _notifications.Poll();
+        if (now - _weatherAt > TimeSpan.FromMinutes(30)) _ = RefreshWeather();
         UpdateBattery();
         KeepOnTop();
         await UpdateMedia();
@@ -685,6 +709,26 @@ public partial class MainWindow : Window
             else _audioDevice.AudioEndpointVolume.MasterVolumeLevelScalar = v;
         }
         catch { }
+    }
+
+    public async Task RefreshWeather()
+    {
+        _weatherAt = DateTime.Now;
+        var cfg = Config.Current;
+        if (cfg.Latitude is not double lat || cfg.Longitude is not double lon)
+        {
+            WeatherText.Visibility = Visibility.Collapsed;
+            return;
+        }
+        try
+        {
+            var (temp, code) = await Weather.Now(lat, lon);
+            var (symbol, text) = Weather.Describe(code);
+            WeatherText.Text = $"{symbol} {Math.Round(temp)}°";
+            WeatherText.ToolTip = $"{text} · {cfg.City}";
+            WeatherText.Visibility = Visibility.Visible;
+        }
+        catch { _weatherAt = DateTime.Now.AddMinutes(-25); } // sem internet: tenta de novo em ~5 min
     }
 
     string? SafeDeviceName()

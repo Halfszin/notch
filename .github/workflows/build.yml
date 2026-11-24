@@ -40,6 +40,13 @@ jobs:
             [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
             $bmp.Save("ci\$name.png")
           }
+          # Dados de exemplo: cidade (clima), atalhos e uma tarefa que vence durante o teste (lembrete).
+          $dir = "$env:APPDATA\Orbi"
+          New-Item -ItemType Directory $dir -Force | Out-Null
+          '{"City":"São Paulo, São Paulo, Brasil","Latitude":-23.55,"Longitude":-46.63,"AppNotifications":true}' | Set-Content "$dir\config.json" -Encoding utf8
+          '[{"Name":"Bloco de notas","Target":"C:\\Windows\\System32\\notepad.exe"},{"Name":"github.com","Target":"https://github.com/"}]' | Set-Content "$dir\atalhos.json" -Encoding utf8
+          $due = (Get-Date).AddSeconds(12).ToString("s")
+          "[{""Title"":""Lembrete do teste do CI"",""Due"":""$due"",""Done"":false,""Notified"":false},{""Title"":""Comprar pão"",""Due"":null,""Done"":false,""Notified"":false}]" | Set-Content "$dir\tarefas.json" -Encoding utf8
           $p = Start-Process publish\Orbi.exe -PassThru
           Start-Sleep 15
           Shot "1-configuracoes"
@@ -71,6 +78,9 @@ jobs:
             Tab "Sistema" "7-sistema"
             Tab "Notas" "8-notas"
             Tab "Bandeja" "9-bandeja"
+            Tab "Tarefas" "10-tarefas"
+            Tab "Atalhos" "11-atalhos"
+            Tab "IA" "12-ia"
           } catch { "UIA: $_" | Out-File ci\uia.txt }
           # Bug do Alt+Tab: tira o "sempre por cima" do notch e confere se ele volta sozinho.
           Add-Type @"

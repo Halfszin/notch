@@ -78,7 +78,7 @@ public partial class ShelfPage : UserControl
         var thumb = new Border { Width = 54, Height = 44, CornerRadius = new CornerRadius(8), Background = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x26)) };
         if (item.File != null && ImageExt.Contains(Path.GetExtension(item.File)) && Thumb(item.File) is { } img)
             thumb.Background = new ImageBrush(img) { Stretch = Stretch.UniformToFill };
-        else if (item.File != null && FileIcon(item.File) is { } icon)
+        else if (item.File != null && Shell.FileIcon(item.File) is { } icon)
             thumb.Child = new Image { Source = icon, Width = 28, Height = 28 };
         else
             thumb.Child = new TextBlock { Text = item.Text?.Length > 40 ? item.Text[..40] : item.Text, FontSize = 8.5, Foreground = Brushes.LightGray, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(5) };
@@ -138,27 +138,4 @@ public partial class ShelfPage : UserControl
         catch { return null; }
     }
 
-    static ImageSource? FileIcon(string file)
-    {
-        // Ícone que o Explorer mostra para o arquivo (ou pasta).
-        var info = new FileInfoShell();
-        if (SHGetFileInfo(file, 0, ref info, (uint)Marshal.SizeOf<FileInfoShell>(), 0x100) == IntPtr.Zero || info.Icon == IntPtr.Zero) return null;
-        try { return Imaging.CreateBitmapSourceFromHIcon(info.Icon, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions()); }
-        catch { return null; }
-        finally { DestroyIcon(info.Icon); }
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    struct FileInfoShell
-    {
-        public IntPtr Icon;
-        public int IconIndex;
-        public uint Attributes;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string DisplayName;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)] public string TypeName;
-    }
-
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    static extern IntPtr SHGetFileInfo(string path, uint attributes, ref FileInfoShell info, uint size, uint flags);
-    [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr icon);
 }
