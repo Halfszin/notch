@@ -7,9 +7,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Orbi</AssemblyName>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <ApplicationIcon>orbi.ico</ApplicationIcon>
-    <DefaultItemExcludes>$(DefaultItemExcludes);web/node_modules/**;publish/**;dist/**;ci/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);web/node_modules/**;tests/**;publish/**;dist/**;ci/**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />

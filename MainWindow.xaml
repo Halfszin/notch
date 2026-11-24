@@ -111,10 +111,10 @@
             <!-- Fechado: anel da bateria (com raio quando carregando) + hora -->
             <StackPanel x:Name="Mini" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
                 <Grid Width="18" Height="18" Margin="3">
-                    <Ellipse Stroke="#333" StrokeThickness="3" Margin="1.5"/>
-                    <Path x:Name="RingMini" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                    <TextBlock x:Name="BoltMini" Text="&#xE945;" FontFamily="Segoe MDL2 Assets" FontSize="8"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                    <Ellipse Stroke="#2E2E31" StrokeThickness="2.5" Margin="1.5"/>
+                    <Path x:Name="RingMini" StrokeThickness="2.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                    <Path x:Name="BoltMini" Data="M6,0 L0,6.2 H3.8 L2.8,11 L9,4.6 H5.2 Z" Width="6.5" Height="8" Stretch="Uniform"
+ HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
                 </Grid>
                 <StackPanel x:Name="Bars" Orientation="Horizontal" Margin="3,0" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
                     <Rectangle x:Name="Bar1" Width="3" Height="4" RadiusX="1.5" RadiusY="1.5" Fill="#30D158" Margin="1,0" VerticalAlignment="Center"/>
@@ -126,32 +126,35 @@
             </StackPanel>
 
             <!-- Aberto -->
-            <Grid x:Name="Full" Width="440" Height="226" Opacity="0" IsHitTestVisible="False">
-                <Grid Margin="14,6,14,14">
+            <Grid x:Name="Full" Width="440" Height="264" Opacity="0" IsHitTestVisible="False">
+                <Grid Margin="14,6,14,8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="34"/>
                         <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
+                    <!-- Barra de navegação embaixo -->
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,6,0,0">
+                        <RadioButton Style="{StaticResource Tab}" Content="&#xE80F;" Tag="home" IsChecked="True" Checked="Tab_Checked"
+                                     ToolTip="Início" AutomationProperties.Name="Início" Margin="4,0"/>
+                        <RadioButton Style="{StaticResource Tab}" Content="&#xE787;" Tag="calendar" Checked="Tab_Checked"
+                                     ToolTip="Calendário e timer" AutomationProperties.Name="Calendário" Margin="4,0"/>
+                    </StackPanel>
+
                     <DockPanel>
-                        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                            <RadioButton Style="{StaticResource Tab}" Content="&#xE80F;" Tag="home" IsChecked="True" Checked="Tab_Checked"
-                                         ToolTip="Início" AutomationProperties.Name="Início"/>
-                            <RadioButton Style="{StaticResource Tab}" Content="&#xE787;" Tag="calendar" Checked="Tab_Checked"
-                                         ToolTip="Calendário e timer" AutomationProperties.Name="Calendário"/>
-                        </StackPanel>
                         <Grid DockPanel.Dock="Right">
                             <Button Style="{StaticResource IconBtn}" Content="&#xE713;"
                                     ToolTip="Configurações" AutomationProperties.Name="Configurações" Click="Settings_Click"/>
                             <Ellipse x:Name="UpdateDot" Width="7" Height="7" Fill="#30D158" HorizontalAlignment="Right" VerticalAlignment="Top"
                                      Margin="0,4,6,0" IsHitTestVisible="False" Visibility="Collapsed" ToolTip="Versão nova pronta"/>
                         </Grid>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,4,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="8,0,0,0">
                             <Grid Width="18" Height="18" Margin="0,0,5,0">
-                                <Ellipse Stroke="#333" StrokeThickness="3" Margin="1.5"/>
-                                <Path x:Name="RingFull" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                <TextBlock x:Name="BoltFull" Text="&#xE945;" FontFamily="Segoe MDL2 Assets" FontSize="8"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                                <Ellipse Stroke="#2E2E31" StrokeThickness="2.5" Margin="1.5"/>
+                                <Path x:Name="RingFull" StrokeThickness="2.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                <Path x:Name="BoltFull" Data="M6,0 L0,6.2 H3.8 L2.8,11 L9,4.6 H5.2 Z" Width="6.5" Height="8" Stretch="Uniform"
+ HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
                             </Grid>
                             <TextBlock x:Name="BatteryText" FontSize="12" Foreground="#AAA" Margin="0,0,10,0" VerticalAlignment="Center"/>
                             <TextBlock x:Name="DateText" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center"/>

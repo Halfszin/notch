@@ -18,7 +18,7 @@ namespace Orbi;
 
 public partial class MainWindow : Window
 {
-    const double FullW = 440, FullH = 226;
+    const double FullW = 440, FullH = 264;
     // Folga em volta do notch aberto para a animação com "mola" passar um pouco do tamanho final sem cortar.
     const double WinW = FullW + 24, WinH = FullH + 16;
     static readonly string EdgeFile = System.IO.Path.Combine(App.Dir, "edge.txt");
@@ -35,9 +35,10 @@ public partial class MainWindow : Window
     readonly List<AudioMeterInformation> _spotifyMeters = new();
     readonly Dictionary<uint, bool> _spotifyPids = new();
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
-    readonly DispatcherTimer _beat = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
+    readonly DispatcherTimer _beat = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
     readonly DispatcherTimer _autoClose = new() { Interval = TimeSpan.FromSeconds(7) };
-    double _level;
+    BeatDetector _beats = new();
+    long _lastBounceMs;
 
     public string Edge { get; private set; } = "Top";
 
@@ -223,7 +224,7 @@ public partial class MainWindow : Window
         double pct = none ? 1 : p.Percent / 100.0;
         var brush = none ? Brushes.Gray : pct <= 0.2 && !charging ? Red : Green;
         RingMini.Data = RingFull.Data = RingGeometry(pct);
-        RingMini.Stroke = RingFull.Stroke = BoltMini.Foreground = BoltFull.Foreground = brush;
+        RingMini.Stroke = RingFull.Stroke = BoltMini.Fill = BoltFull.Fill = brush;
         BoltMini.Visibility = BoltFull.Visibility = charging ? Visibility.Visible : Visibility.Collapsed;
         BatteryText.Text = none ? "" : $"{p.Percent}%";
         // Ligou o carregador: fica animado. Tirou: leva um susto.
@@ -346,8 +347,8 @@ public partial class MainWindow : Window
         else
         {
             _beat.Stop();
-            _level = 0;
-            ApplyLevel(0);
+            _beats = new BeatDetector();
+            ApplyLevel(0, 0);
         }
     }
 
@@ -361,22 +362,30 @@ public partial class MainWindow : Window
                 : _audioDevice?.AudioMeterInformation.MasterPeakValue ?? 0;
         }
         catch { }
-        // Sobe na hora, desce devagar: pulsa na batida sem tremer.
-        _level = Math.Max(peak, _level * 0.82);
-        ApplyLevel(_level);
+        long now = Environment.TickCount64;
+        double pulse = _beats.Process(peak, now);
+        // Batida forte com o notch aberto: o avatar dá um pulinho (no máximo ~2 por segundo).
+        if (_beats.LastWasBeat && pulse > 0.85 && _open && now - _lastBounceMs > 450)
+        {
+            _lastBounceMs = now;
+            Avatar.Poke("bounce");
+        }
+        ApplyLevel(pulse, peak);
     }
 
-    void ApplyLevel(double level)
+    // pulse: salta em cada batida e some rápido. peak: volume do momento (só para as barrinhas não pararem).
+    void ApplyLevel(double pulse, double peak)
     {
         double t = Environment.TickCount64 / 1000.0;
-        AvatarScale.ScaleX = AvatarScale.ScaleY = 1 + 0.10 * level;
-        GlowScale.ScaleX = GlowScale.ScaleY = 1 + 0.30 * level;
-        Glow.Opacity = 0.55 + 0.45 * level;
-        // Notch fechado "respira" com a música; aberto fica parado para não atrapalhar os botões.
-        PillScale.ScaleX = PillScale.ScaleY = _open ? 1 : 1 + 0.05 * level;
-        Bar1.Height = 3 + 11 * level * (0.65 + 0.35 * Math.Sin(t * 9));
-        Bar2.Height = 3 + 11 * level;
-        Bar3.Height = 3 + 11 * level * (0.65 + 0.35 * Math.Sin(t * 7 + 1.7));
+        AvatarScale.ScaleX = AvatarScale.ScaleY = 1 + 0.16 * pulse;
+        GlowScale.ScaleX = GlowScale.ScaleY = 1 + 0.45 * pulse;
+        Glow.Opacity = 0.45 + 0.55 * pulse;
+        // Notch fechado pulsa na batida; aberto fica parado para não atrapalhar os botões.
+        PillScale.ScaleX = PillScale.ScaleY = _open ? 1 : 1 + 0.08 * pulse;
+        double bed = peak * 0.35;
+        Bar1.Height = 3 + 11 * Math.Max(pulse * 0.75, bed * (0.6 + 0.4 * Math.Sin(t * 11)));
+        Bar2.Height = 3 + 11 * Math.Max(pulse, bed);
+        Bar3.Height = 3 + 11 * Math.Max(pulse * 0.6, bed * (0.6 + 0.4 * Math.Sin(t * 8 + 1.7)));
     }
 
     // ---------- volume ----------
