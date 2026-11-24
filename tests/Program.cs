@@ -166,6 +166,20 @@ if (status != "Opus · 5h 42%") failures.Add("servidor: status line: " + status)
 Curl($"{baseUrl}/Stop", "{\"session_id\":\"s1\",\"cwd\":\"C:/projetos/loja\"}");
 if (hub.Sessions["s1"].Busy || hub.Sessions["s1"].Status != "Terminou") failures.Add("servidor: Stop");
 
+// ---- Última mensagem do Claude (aviso de "terminou") ----
+string transcript = Path.GetTempFileName();
+File.WriteAllLines(transcript, new[]
+{
+    "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"rode os testes\"}}",
+    "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"Rodando agora.\"}]}}",
+    "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"name\":\"Bash\"}]}}",
+    "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"Migração aplicada, 14 testes passaram.\"}]}}",
+    "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"te",   // linha pela metade no fim
+});
+if (AgentHub.LastAssistantText(transcript) != "Migração aplicada, 14 testes passaram.") failures.Add("última mensagem: " + AgentHub.LastAssistantText(transcript));
+if (AgentHub.LastAssistantText("/nao/existe.jsonl") != null) failures.Add("última mensagem: arquivo que não existe");
+File.Delete(transcript);
+
 foreach (var f in failures) Console.WriteLine("FALHA " + f);
 ok &= failures.Count == 0;
 Console.WriteLine(ok ? "OK" : "FALHOU");

@@ -74,6 +74,29 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="PillAction" TargetType="Button">
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="#2A2A2F"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="16" Padding="13,6">
+                            <ContentPresenter HorizontalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="BarBtn" TargetType="RepeatButton">
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="Template">
@@ -166,7 +189,7 @@
 
                     <!-- Barra de navegação embaixo -->
                     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,6,0,0">
-                        <RadioButton Style="{StaticResource Tab}" Content="&#xE80F;" Tag="home" IsChecked="True" Checked="Tab_Checked"
+                        <RadioButton x:Name="TabHome" Style="{StaticResource Tab}" Content="&#xE80F;" Tag="home" IsChecked="True" Checked="Tab_Checked"
                                      ToolTip="Início" AutomationProperties.Name="Início" Margin="1,0"/>
                         <RadioButton Style="{StaticResource Tab}" Content="&#xE787;" Tag="calendar" Checked="Tab_Checked"
                                      ToolTip="Calendário e timer" AutomationProperties.Name="Calendário" Margin="1,0"/>
@@ -193,6 +216,7 @@
                             <Ellipse x:Name="UpdateDot" Width="7" Height="7" Fill="#30D158" HorizontalAlignment="Right" VerticalAlignment="Top"
                                      Margin="0,4,6,0" IsHitTestVisible="False" Visibility="Collapsed" ToolTip="Versão nova pronta"/>
                         </Grid>
+                        <TextBlock x:Name="AgentsCount" DockPanel.Dock="Right" FontSize="12" Foreground="#8E8E93" VerticalAlignment="Center" Margin="0,0,10,0" Visibility="Collapsed"/>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="8,0,0,0">
                             <TextBlock x:Name="WeatherText" FontSize="12" Margin="0,0,12,0" VerticalAlignment="Center" Visibility="Collapsed"
                                        FontFamily="Segoe UI Symbol, Segoe UI"/>
@@ -208,8 +232,17 @@
                         </StackPanel>
                     </DockPanel>
 
-                    <Border Grid.Row="1" Background="#141416" CornerRadius="16" BorderBrush="#222226" BorderThickness="1" Padding="10,10,14,10">
+                    <Border Grid.Row="1" Background="#161619" CornerRadius="24" Padding="10,10,14,10" ClipToBounds="True">
                         <Grid>
+                        <!-- Brilho colorido na base do cartão: laranja = permissão, verde = terminou -->
+                        <Border x:Name="EventGlow" Margin="-10,-10,-14,-10" CornerRadius="24" Opacity="0" IsHitTestVisible="False">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#00000000" Offset="0.45"/>
+                                    <GradientStop x:Name="EventGlowColor" Color="#55FF9F0A" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
                         <local:CalendarPage x:Name="CalendarView" Visibility="Collapsed"/>
                         <local:ShelfPage x:Name="ShelfView" Visibility="Collapsed"/>
                         <local:ClipboardPage x:Name="ClipView" Visibility="Collapsed"/>
@@ -219,28 +252,6 @@
                         <local:ShortcutsPage x:Name="ShortcutsView" Visibility="Collapsed"/>
                         <local:AiPage x:Name="AiView" Visibility="Collapsed"/>
 
-                        <!-- Pedido de permissão do Claude Code: aparece por cima de qualquer aba -->
-                        <Border x:Name="PermissionCard" Background="#141416" Visibility="Collapsed" Panel.ZIndex="5">
-                            <DockPanel>
-                                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
-                                    <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="#FF9F0A" Margin="0,1,8,0"/>
-                                    <TextBlock x:Name="PermTitle" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                </DockPanel>
-                                <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                        <Button Content="Negar" Tag="deny" Click="Permission_Click" Style="{StaticResource ActionBtn}" Background="#3A2222" Foreground="#FF8A80" AutomationProperties.Name="Negar"/>
-                                        <Button x:Name="PermAlways" Content="Sempre" Tag="always" Click="Permission_Click" Style="{StaticResource ActionBtn}" Background="#26262B" Foreground="White" Margin="6,0" AutomationProperties.Name="Permitir sempre"/>
-                                        <Button Content="Permitir" Tag="allow" Click="Permission_Click" Style="{StaticResource ActionBtn}" Background="#30D158" Foreground="Black" AutomationProperties.Name="Permitir"/>
-                                    </StackPanel>
-                                    <TextBlock x:Name="PermQueue" FontSize="10.5" Foreground="#888" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,8,0"/>
-                                </DockPanel>
-                                <Border Background="#1C1C20" CornerRadius="8" Padding="9,6">
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                        <TextBlock x:Name="PermDetail" FontFamily="Cascadia Mono, Consolas" FontSize="11.5" TextWrapping="Wrap" Foreground="#DDD"/>
-                                    </ScrollViewer>
-                                </Border>
-                            </DockPanel>
-                        </Border>
                         <Grid x:Name="HomePage">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
@@ -266,6 +277,10 @@
                                             </RadialGradientBrush>
                                         </Ellipse.Fill>
                                     </Ellipse>
+                                    <Border x:Name="AvatarBadge" Width="22" Height="22" CornerRadius="11" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                            Margin="4,14,0,0" Panel.ZIndex="2" Visibility="Collapsed" BorderBrush="#161619" BorderThickness="2" IsHitTestVisible="False">
+                                        <TextBlock x:Name="AvatarBadgeText" FontSize="11" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
                                     <local:AvatarView x:Name="Avatar" Width="104" Height="104" RenderTransformOrigin="0.5,0.5">
                                         <local:AvatarView.RenderTransform>
                                             <ScaleTransform x:Name="AvatarScale"/>
@@ -274,7 +289,29 @@
                                 </Grid>
                             </Button>
 
-                            <Grid Grid.Column="1" VerticalAlignment="Center">
+                            <!-- Evento do Claude Code ao lado do avatar (pedido de permissão / terminou) -->
+                            <StackPanel x:Name="EventPanel" Grid.Column="1" VerticalAlignment="Center" Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <Ellipse x:Name="EventDot" Width="8" Height="8" VerticalAlignment="Center" Margin="0,1,7,0"/>
+                                    <TextBlock x:Name="EventProject" FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="EventWhat" FontSize="13" Foreground="#8E8E93" Margin="6,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                                <Border x:Name="EventCodeBox" Background="#26262B" CornerRadius="10" Padding="10,6" HorizontalAlignment="Left" MaxHeight="60" Margin="0,0,0,10">
+                                    <TextBlock x:Name="EventCode" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"/>
+                                </Border>
+                                <TextBlock x:Name="EventMessage" FontSize="14" FontWeight="Bold" TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis" Margin="0,0,0,10"/>
+                                <StackPanel x:Name="PermButtons" Orientation="Horizontal">
+                                    <Button Content="Negar" Tag="deny" Click="Permission_Click" Style="{StaticResource PillAction}" AutomationProperties.Name="Negar"/>
+                                    <Button x:Name="PermAlways" Content="Sempre permitir" Tag="always" Click="Permission_Click" Style="{StaticResource PillAction}" AutomationProperties.Name="Permitir sempre"/>
+                                    <Button Content="Permitir" Tag="allow" Click="Permission_Click" Style="{StaticResource PillAction}" Background="White" Foreground="Black" AutomationProperties.Name="Permitir"/>
+                                </StackPanel>
+                                <StackPanel x:Name="DoneButtons" Orientation="Horizontal">
+                                    <Button Content="OK" Click="EventOk_Click" Style="{StaticResource PillAction}" Background="White" Foreground="Black" AutomationProperties.Name="OK"/>
+                                </StackPanel>
+                                <TextBlock x:Name="PermQueue" FontSize="10.5" Foreground="#6E6E73" Margin="2,6,0,0"/>
+                            </StackPanel>
+
+                            <Grid x:Name="MediaPanel" Grid.Column="1" VerticalAlignment="Center">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>

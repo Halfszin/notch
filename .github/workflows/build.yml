@@ -93,6 +93,9 @@ jobs:
             (Find "Agentes").GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
             Start-Sleep 1
             Shot "14-agentes"
+            '{"session_id":"ci","cwd":"C:/projetos/loja","last_assistant_message":"Migração aplicada, 14 testes passaram."}' | curl.exe -s -m 5 --data-binary "@-" "http://127.0.0.1:47821/citoken/Stop" | Out-Null
+            Start-Sleep 2
+            Shot "15-terminou"
           } catch { "UIA: $_" | Out-File ci\uia.txt }
           # Bug do Alt+Tab: tira o "sempre por cima" do notch e confere se ele volta sozinho.
           Add-Type @"

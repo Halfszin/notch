@@ -15,7 +15,7 @@ public sealed class AgentHub
 
     public sealed class Permission
     {
-        public string Project = "", Tool = "", Detail = "";
+        public string Project = "", Tool = "", Detail = "", What = "", Code = "";
         public JsonNode? Suggestions;
         public readonly TaskCompletionSource<string> Answer = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
@@ -29,7 +29,7 @@ public sealed class AgentHub
     public bool Busy => Sessions.Values.Any(s => s.Busy);
 
     public event Action? Changed;
-    public event Action<string>? Finished;                 // projeto
+    public event Action<string, string>? Finished;         // projeto, última mensagem do Claude
     public event Action<string, string>? NeedsYou;         // projeto, mensagem
     public event Action<Permission>? PermissionAsked;
 
@@ -60,11 +60,27 @@ public sealed class AgentHub
                 s.Status = "Esperando você"; s.Busy = false;
                 NeedsYou?.Invoke(project, Str(p, "message") ?? "O Claude precisa de você");
                 break;
-            case "Stop": s.Status = "Terminou"; s.Busy = false; Finished?.Invoke(project); break;
+            case "Stop":
+                s.Status = "Terminou"; s.Busy = false;
+                Finished?.Invoke(project, Str(p, "last_assistant_message") ?? LastAssistantText(Str(p, "transcript_path")) ?? "");
+                break;
             case "SessionEnd": Sessions.Remove(id); break;
             case "PermissionRequest":
                 s.Status = "Pedindo permissão"; s.Busy = false;
-                var perm = new Permission { Project = project, Tool = Str(p, "tool_name") ?? "", Detail = Describe(Str(p, "tool_name") ?? "", p["tool_input"], full: true), Suggestions = p["permission_suggestions"]?.DeepClone() };
+                string tool = Str(p, "tool_name") ?? "";
+                var input = p["tool_input"];
+                var perm = new Permission
+                {
+                    Project = project, Tool = tool, Detail = Describe(tool, input, full: true), Suggestions = p["permission_suggestions"]?.DeepClone(),
+                    What = tool switch
+                    {
+                        "Bash" or "PowerShell" => "Claude Code quer rodar um comando",
+                        "Edit" or "MultiEdit" or "Write" or "NotebookEdit" => "Claude Code quer mexer num arquivo",
+                        "WebFetch" or "WebSearch" => "Claude Code quer acessar a web",
+                        _ => $"Claude Code quer usar {tool}",
+                    },
+                    Code = Str(input, "command") ?? Str(input, "file_path") ?? Str(input, "url") ?? Str(input, "query") ?? tool,
+                };
                 Pending.Add(perm);
                 Changed?.Invoke();
                 PermissionAsked?.Invoke(perm);
@@ -110,6 +126,31 @@ public sealed class AgentHub
             "" => "Trabalhando",
             _ => $"Usando {tool}",
         };
+    }
+
+    /// <summary>Último texto que o Claude escreveu, lido do fim do registro da sessão (para o aviso de "terminou").</summary>
+    public static string? LastAssistantText(string? transcript)
+    {
+        try
+        {
+            if (transcript == null || !File.Exists(transcript)) return null;
+            using var fs = new FileStream(transcript, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            fs.Seek(Math.Max(0, fs.Length - 256 * 1024), SeekOrigin.Begin); // só o fim: o registro pode ser enorme
+            var lines = new StreamReader(fs).ReadToEnd().Split('\n');
+            for (int i = lines.Length - 1; i >= 0; i--)
+            {
+                if (!lines[i].Contains("\"assistant\"")) continue;
+                try
+                {
+                    if (JsonNode.Parse(lines[i]) is not JsonObject row || Str(row, "type") != "assistant" || row["message"]?["content"] is not JsonArray content) continue;
+                    var text = string.Join(" ", content.OfType<JsonObject>().Where(b => Str(b, "type") == "text").Select(b => Str(b, "text"))).Trim();
+                    if (text.Length > 0) return text.Length > 200 ? text[..200] + "…" : text;
+                }
+                catch (System.Text.Json.JsonException) { } // linha pela metade
+            }
+        }
+        catch (IOException) { }
+        return null;
     }
 
     static string Short(string s)

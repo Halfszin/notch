@@ -221,7 +221,7 @@ public partial class MainWindow : Window
         {
             "Left" => (0.0, y, HorizontalAlignment.Left, VerticalAlignment.Center, new CornerRadius(0, 16, 16, 0), new Point(0, 0.5)),
             "Right" => (sw - WinW, y, HorizontalAlignment.Right, VerticalAlignment.Center, new CornerRadius(16, 0, 0, 16), new Point(1, 0.5)),
-            _ => (x, 0.0, HorizontalAlignment.Center, VerticalAlignment.Top, new CornerRadius(0, 0, 20, 20), new Point(0.5, 0)),
+            _ => (x, 0.0, HorizontalAlignment.Center, VerticalAlignment.Top, new CornerRadius(0, 0, 28, 28), new Point(0.5, 0)),
         };
         ShowMiniClock();
         Resize(false, animate: false);
@@ -293,6 +293,7 @@ public partial class MainWindow : Window
         Fade(ToastPanel, toast ? 1 : 0, animate ? 160 : 0, toast && animate ? 120 : 0);
         if (!open) AllowKeyboard(false);
         Full.IsHitTestVisible = open;
+        if (!open && _event == "done") HideEvent();
         if (open) { Avatar.Resume(); _look.Start(); }
         else { Avatar.Pause(); _look.Stop(); Avatar.LookAt(null, null); }
     }
@@ -330,12 +331,23 @@ public partial class MainWindow : Window
         if (portMoved && HookInstaller.IsInstalled())
             Dispatcher.BeginInvoke(() => Toast("\uE7BA", "Agentes: a porta mudou, reconecte em Configurações", null, 8));
         Agents.PermissionAsked += _ => ShowPermission();
-        Agents.Changed += () => { if (Agents.Pending.Count == 0) PermissionCard.Visibility = Visibility.Collapsed; else ShowPermission(); };
-        Agents.Finished += project =>
+        Agents.Changed += () =>
+        {
+            if (Agents.Pending.Count > 0) ShowPermission();
+            else if (_event == "permission") HideEvent();
+            int working = Agents.Sessions.Values.Count(x => x.Busy);
+            AgentsCount.Text = working == 1 ? "1 em andamento" : $"{working} em andamento";
+            AgentsCount.Visibility = working > 0 ? Visibility.Visible : Visibility.Collapsed;
+            UpdateBadge();
+        };
+        Agents.Finished += (project, message) =>
         {
             SystemSounds.Asterisk.Play();
-            Toast("\uE73E", $"{project}: o Claude terminou", Green, 5);
             React("celebrate", 4);
+            if (Agents.Pending.Count > 0) { Toast("\uE73E", $"{project}: o Claude terminou", Green, 5); return; } // permissão tem prioridade
+            ShowEvent("done", project, "Claude Code terminou", null, message.Length > 0 ? message : "Pronto!");
+            if (!_open) Resize(true);
+            _autoClose.Start(); // fecha sozinho se você não estiver com o mouse no notch
         };
         Agents.NeedsYou += (project, message) =>
         {
@@ -344,15 +356,60 @@ public partial class MainWindow : Window
         };
     }
 
+    // ---------- evento ao lado do avatar (estilo coucou): permissão ou "terminou" ----------
+
+    string? _event; // "permission", "done" ou null
+    static readonly Color Orange = Color.FromRgb(0xFF, 0x9F, 0x0A), GreenColor = Color.FromRgb(0x30, 0xD1, 0x58), Blue = Color.FromRgb(0x0A, 0x84, 0xFF);
+
+    void ShowEvent(string kind, string project, string what, string? code, string? message)
+    {
+        _event = kind;
+        var color = kind == "permission" ? Orange : GreenColor;
+        TabHome.IsChecked = true;
+        MediaPanel.Visibility = Visibility.Collapsed;
+        EventPanel.Visibility = Visibility.Visible;
+        EventDot.Fill = new SolidColorBrush(color);
+        EventProject.Text = project;
+        EventWhat.Text = what;
+        EventCode.Text = code ?? "";
+        EventCodeBox.Visibility = code != null ? Visibility.Visible : Visibility.Collapsed;
+        EventMessage.Text = message ?? "";
+        EventMessage.Visibility = message != null ? Visibility.Visible : Visibility.Collapsed;
+        PermButtons.Visibility = kind == "permission" ? Visibility.Visible : Visibility.Collapsed;
+        DoneButtons.Visibility = kind == "done" ? Visibility.Visible : Visibility.Collapsed;
+        PermQueue.Visibility = kind == "permission" ? Visibility.Visible : Visibility.Collapsed;
+        EventGlowColor.Color = Color.FromArgb(0x55, color.R, color.G, color.B);
+        EventGlow.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(300)));
+        UpdateBadge();
+    }
+
+    void HideEvent()
+    {
+        _event = null;
+        EventPanel.Visibility = Visibility.Collapsed;
+        MediaPanel.Visibility = Visibility.Visible;
+        EventGlow.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(300)));
+        UpdateBadge();
+    }
+
+    // Selo no canto do avatar: ! = pedindo permissão, ✓ = terminou, … = algum agente trabalhando.
+    void UpdateBadge()
+    {
+        (string? text, Color color) = _event == "permission" ? ("!", Orange)
+            : _event == "done" ? ("✓", GreenColor)
+            : Agents.Busy ? ("…", Blue) : (null, Blue);
+        AvatarBadge.Visibility = text != null ? Visibility.Visible : Visibility.Collapsed;
+        AvatarBadge.Background = new SolidColorBrush(color);
+        AvatarBadgeText.Text = text ?? "";
+    }
+
     void ShowPermission()
     {
         if (Agents.Pending.FirstOrDefault() is not { } perm) return;
-        bool first = PermissionCard.Visibility != Visibility.Visible;
-        PermTitle.Text = $"{perm.Project}: o Claude pede permissão";
-        PermDetail.Text = perm.Detail;
+        bool first = _event != "permission";
+        ShowEvent("permission", perm.Project, perm.What, perm.Code, null);
         PermAlways.Visibility = perm.Suggestions is System.Text.Json.Nodes.JsonArray { Count: > 0 } ? Visibility.Visible : Visibility.Collapsed;
         PermQueue.Text = Agents.Pending.Count > 1 ? $"+{Agents.Pending.Count - 1} na fila" : "Sem resposta em 2 min, vai para o terminal";
-        PermissionCard.Visibility = Visibility.Visible;
         if (!first) return;
         SystemSounds.Exclamation.Play();
         _autoClose.Stop();
@@ -366,6 +423,8 @@ public partial class MainWindow : Window
         AgentHub.Decide(perm, (string)((Button)s).Tag);
         React((string)((Button)s).Tag == "deny" ? "surprised" : "approving", 2);
     }
+
+    void EventOk_Click(object s, RoutedEventArgs e) => HideEvent();
 
     void LookAtCursor()
     {
