@@ -141,7 +141,8 @@ hub.PermissionAsked += perm => AgentHub.Decide(perm, "allow"); // como se você 
 var server = AgentServer.Start(47900, "segredo123", hub.Handle)!;
 string Curl(string url, string body)
 {
-    var psi = new System.Diagnostics.ProcessStartInfo("bash", new[] { "-c", $"curl -s -m 10 --data-binary @- {url} || true" })
+    // O mesmo curl dos hooks; chamado direto porque no Windows do CI o "bash" não é o Git Bash.
+    var psi = new System.Diagnostics.ProcessStartInfo("curl", new[] { "-s", "-m", "10", "--data-binary", "@-", url })
         { RedirectStandardInput = true, RedirectStandardOutput = true };
     using var proc = System.Diagnostics.Process.Start(psi)!;
     proc.StandardInput.Write(body);
