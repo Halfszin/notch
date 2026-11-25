@@ -186,11 +186,11 @@ export component Notch inherits Window {
     callback next();
     callback previous();
 
-    // páginas: 0 música, 1 tarefas, 2 foco, 3 água
+    // páginas: 0 música, 1 tarefas, 2 foco
     in-out property <int> page: 0;
-    property <int> pages: 4;
-    property <[string]> titles: ["Tocando", "Tarefas", "Foco", "Água"];
-    property <[string]> subtitles: ["agora", "hoje", "timer", "do dia"];
+    property <int> pages: 3;
+    property <[string]> titles: ["Tocando", "Tarefas", "Foco"];
+    property <[string]> subtitles: ["agora", "hoje", "timer"];
 
     // tarefas
     in property <[TaskRow]> tasks;
@@ -209,11 +209,6 @@ export component Notch inherits Window {
     callback focus-reset();
     callback focus-preset(int);
 
-    // água
-    in property <int> water;
-    in property <int> water-goal: 8;
-    callback water-add();
-    callback water-remove();
 
     property <color> ring-color: !root.has-battery ? #8E8E93 : (root.battery <= 0.2 && !root.charging ? #FF453A : #30D158);
     property <bool> music-glow: root.page == 0 && root.has-cover;
@@ -439,38 +434,6 @@ export component Notch inherits Window {
                             background: root.focus-minutes == m ? #2C2C31 : transparent;
                             Text { text: m + "m"; color: root.focus-minutes == m ? white : #8E8E93; font-size: 12px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
                             TouchArea { clicked => { root.focus-preset(m); } mouse-cursor: pointer; }
-                        }
-                    }
-                }
-
-                // ---- página: água ----
-                if root.page == 3 : HorizontalLayout {
-                    spacing: 24px;
-                    VerticalLayout {
-                        width: 210px;
-                        alignment: center;
-                        spacing: 4px;
-                        Text { text: root.water + "/" + root.water-goal; color: white; font-size: 42px; font-weight: 800; }
-                        Text { text: "copos de água hoje"; color: #8E8E93; font-size: 13px; }
-                        Rectangle { height: 8px; }
-                        HorizontalLayout {
-                            spacing: 8px;
-                            alignment: start;
-                            Pill { primary: true; glyph: "\u{E710}"; label: "1 copo"; clicked => { root.water-add(); } }
-                            Pill { glyph: "\u{E738}"; label: "Desfazer"; clicked => { root.water-remove(); } }
-                        }
-                    }
-                    HorizontalLayout {
-                        alignment: center;
-                        spacing: 10px;
-                        for g[i] in root.water-goal : Rectangle {
-                            width: 24px;
-                            height: 40px;
-                            y: 40px;
-                            border-radius: 6px;
-                            border-width: 1.5px;
-                            border-color: #0A84FF;
-                            background: i < root.water ? #0A84FF : transparent;
                         }
                     }
                 }

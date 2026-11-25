@@ -1,5 +1,5 @@
-// Páginas do notch: tarefas, foco e água.
-use crate::store::{self, Task, Water};
+// Páginas do notch: tarefas e foco.
+use crate::store::{self, Task};
 use crate::{Notch, TaskRow};
 use slint::{ComponentHandle, ModelRc, Timer, TimerMode, VecModel};
 use std::cell::RefCell;
@@ -7,9 +7,8 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 const TASKS: &str = "tarefas.json";
-const WATER: &str = "agua.json";
 
-pub fn setup(notch: &Notch, today: impl Fn() -> String + 'static) {
+pub fn setup(notch: &Notch) {
     // ---- tarefas ----
     let tasks: Rc<RefCell<Vec<Task>>> = Rc::new(RefCell::new(store::load(TASKS)));
     let show = {
@@ -61,24 +60,6 @@ pub fn setup(notch: &Notch, today: impl Fn() -> String + 'static) {
             show();
         });
     }
-
-    // ---- água (zera sozinho a cada dia) ----
-    let water: Rc<RefCell<Water>> = Rc::new(RefCell::new(store::load(WATER)));
-    let today = Rc::new(today);
-    let water_show = {
-        let (weak, water, today) = (notch.as_weak(), water.clone(), today.clone());
-        Rc::new(move |delta: i32| {
-            let mut w = water.borrow_mut();
-            let day = today();
-            if w.day != day { w.day = day; w.count = 0; }
-            w.count = (w.count as i32 + delta).clamp(0, 30) as u32;
-            if delta != 0 { store::save(WATER, &*w); }
-            if let Some(n) = weak.upgrade() { n.set_water(w.count as i32); }
-        })
-    };
-    water_show(0);
-    { let s = water_show.clone(); notch.on_water_add(move || s(1)); }
-    { let s = water_show.clone(); notch.on_water_remove(move || s(-1)); }
 
     // ---- foco ----
     struct Focus { minutes: u64, left: Duration, ends: Option<Instant> }

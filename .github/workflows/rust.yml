@@ -50,7 +50,7 @@ jobs:
           Start-Sleep 2
           Shot "2-aberto"
           # Rodinha do mouse para baixo = próxima página.
-          foreach ($name in "3-tarefas", "4-foco", "5-agua") {
+          foreach ($name in "3-tarefas", "4-foco") {
             [W.M]::mouse_event(0x0800, 0, 0, -120, [System.UIntPtr]::Zero)
             Start-Sleep 1
             Shot $name

@@ -110,12 +110,6 @@ fn set_noactivate(hwnd: HWND, on: bool) {
     }
 }
 
-/// Data de hoje "aaaa-mm-dd" (para zerar os copos de água a cada dia).
-pub fn today() -> String {
-    let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
-    format!("{:04}-{:02}-{:02}", t.wYear, t.wMonth, t.wDay)
-}
-
 fn hwnd_of(w: &winit::window::Window) -> Option<HWND> {
     use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
     match w.window_handle().ok()?.as_raw() {

@@ -33,7 +33,7 @@ fn run() -> Result<(), slint::PlatformError> {
     {
         system::setup(&notch);
         media::start(&notch);
-        pages::setup(&notch, system::today);
+        pages::setup(&notch);
     }
     notch.run()
 }

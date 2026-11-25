@@ -35,13 +35,6 @@ pub struct Task {
     pub notified: bool,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug)]
-#[serde(rename_all = "PascalCase")]
-pub struct Water {
-    pub day: String,
-    pub count: u32,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
