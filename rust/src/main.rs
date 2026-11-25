@@ -7,6 +7,7 @@ mod color;
 mod lyrics;
 mod pages;
 mod store;
+mod taskparse;
 #[cfg(windows)]
 mod media;
 #[cfg(windows)]

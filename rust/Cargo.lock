@@ -3036,6 +3036,7 @@ name = "orbi"
 version = "3.0.0-preview.1"
 dependencies = [
  "image",
+ "regex",
  "serde",
  "serde_json",
  "slint",
