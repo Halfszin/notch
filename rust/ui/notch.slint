@@ -145,8 +145,12 @@ export component Notch inherits Window {
     no-frame: true;
     always-on-top: true;
     background: transparent;
-    width: 660px;
-    height: 300px;
+    // A janela muda de tamanho junto com o notch (o Rust ajusta): fora do notch não há janela,
+    // então o clique passa direto para o que está embaixo.
+    preferred-width: 660px;
+    preferred-height: 300px;
+    out property <length> big-width: 660px;
+    out property <length> big-height: 300px;
     default-font-family: "Segoe UI";
 
     // Tamanhos do notch (o Rust usa os mesmos números para saber onde o clique vale).

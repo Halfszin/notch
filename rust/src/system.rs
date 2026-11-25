@@ -62,8 +62,11 @@ pub fn setup(notch: &Notch) {
         });
     });
 
-    // A cada 30 ms: o clique só vale em cima do notch (o resto da janela deixa passar) e os olhos seguem o mouse.
+    // A cada 30 ms: abre quando o mouse está sobre o notch; a janela cresce ao abrir e encolhe
+    // (depois da animação de fechar) ao fechar. Os olhos seguem o mouse.
     let weak = notch.as_weak();
+    let big = std::rc::Rc::new(std::cell::Cell::new(true));
+    let close_at: std::rc::Rc<std::cell::Cell<Option<std::time::Instant>>> = Default::default();
     let fast = Timer::default();
     fast.start(TimerMode::Repeated, Duration::from_millis(30), move || {
         let Some(n) = weak.upgrade() else { return };
@@ -83,13 +86,33 @@ pub fn setup(notch: &Notch) {
             // Margem de 2 px no topo da tela: encostar o mouse na borda também abre.
             let inside = cx >= left && cx <= left + pw && cy >= pos.y as f64 - 2.0 && cy <= pos.y as f64 + ph;
             n.set_hovered(inside);
-            let _ = w.set_cursor_hittest(inside);
+
+            let open = n.get_open();
+            let (lw, lh) = if open || close_at.get().is_some_and(|t| std::time::Instant::now() < t) {
+                (n.get_big_width(), n.get_big_height())
+            } else {
+                (n.get_closed_width(), n.get_closed_height())
+            };
+            if open {
+                close_at.set(None);
+            } else if big.get() && close_at.get().is_none() {
+                close_at.set(Some(std::time::Instant::now() + Duration::from_millis(450))); // deixa a animação de fechar terminar
+            }
+            let want_big = lw > n.get_closed_width();
+            if want_big != big.get() {
+                big.set(want_big);
+                if !want_big { close_at.set(None); }
+                let screen_w = unsafe { GetSystemMetrics(SM_CXSCREEN) } as f64;
+                let _ = w.request_inner_size(winit::dpi::LogicalSize::new(lw as f64, lh as f64));
+                w.set_outer_position(winit::dpi::PhysicalPosition::new(((screen_w - lw as f64 * scale) / 2.0) as i32, 0));
+            }
+
             // Notch fechou: volta a não roubar o foco.
-            if !n.get_open() {
+            if !open {
                 if let Some(hwnd) = hwnd_of(w) { set_noactivate(hwnd, true); }
             }
             // Centro aproximado do avatar (lado esquerdo do notch aberto).
-            let ax = left + 18.0 * scale + 75.0 * scale;
+            let ax = left + 46.0 * scale + 70.0 * scale;
             let ay = pos.y as f64 + 120.0 * scale;
             n.set_look_x(((cx - ax) / (250.0 * scale)).clamp(-1.0, 1.0) as f32);
             n.set_look_y(((ay - cy) / (250.0 * scale)).clamp(-1.0, 1.0) as f32);

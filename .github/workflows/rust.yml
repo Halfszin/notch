@@ -55,6 +55,13 @@ jobs:
             Start-Sleep 1
             Shot $name
           }
+          # Clique de verdade na seta da esquerda: de Foco deve voltar para Tarefas.
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int](($w - 620) / 2 + 22)), 131
+          Start-Sleep -Milliseconds 400
+          [W.M]::mouse_event(0x0002, 0, 0, 0, [System.UIntPtr]::Zero)
+          [W.M]::mouse_event(0x0004, 0, 0, 0, [System.UIntPtr]::Zero)
+          Start-Sleep 1
+          Shot "5-depois-do-clique"
           "vivo=$(-not $p.HasExited)" | Out-File ci\resultado.txt -Append
           if (Test-Path "$env:APPDATA\Orbi\rust-erro.log") { Copy-Item "$env:APPDATA\Orbi\rust-erro.log" ci\erro.log }
           if (Test-Path "$env:APPDATA\Orbi\rust-diag.txt") { Copy-Item "$env:APPDATA\Orbi\rust-diag.txt" ci\diag.txt }
