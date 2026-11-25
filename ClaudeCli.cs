@@ -12,7 +12,10 @@ public static class ClaudeCli
     public static string? Find()
     {
         string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var dirs = new List<string> { Path.Combine(home, ".local", "bin") };
+        // Instalador oficial (.local\bin) e npm (%AppData%\npm) vêm primeiro: o PATH deste processo é o de quando
+        // o Orbi abriu, então um Claude Code instalado depois não estaria nele.
+        var dirs = new List<string> { Path.Combine(home, ".local", "bin"), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "npm") };
+        dirs.AddRange((Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User) ?? "").Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries));
         dirs.AddRange((Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries));
         foreach (var name in new[] { "claude.exe", "claude.cmd" })
             foreach (var dir in dirs)

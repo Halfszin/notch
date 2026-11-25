@@ -52,7 +52,7 @@ public partial class AiPage : UserControl
         Messages.Children.Clear();
         Bubble(ClaudeCli.Find() != null ? "Pergunte qualquer coisa. Respondo pela sua assinatura do Claude (Claude Code), sem custo extra, com busca na web."
             : Config.Current.ApiKey != null ? "Pergunte qualquer coisa. (Sem o Claude Code instalado, estou usando a sua chave da API, que é cobrada por uso.)"
-            : "Para perguntar sem pagar nada a mais, instale o Claude Code e entre com a sua conta do Claude (Pro ou Max).", false, muted: true);
+            : "Para perguntar sem pagar nada a mais, instale o Claude Code: no PowerShell rode  irm https://claude.ai/install.ps1 | iex  e depois  claude  para entrar com a sua conta do Claude (Pro ou Max). Ele precisa do Git para Windows (git-scm.com).", false, muted: true);
     }
 
     void NewChat_Click(object s, MouseButtonEventArgs e)
@@ -76,7 +76,7 @@ public partial class AiPage : UserControl
         Bubble(question, true);
         if (key == null && cli == null)
         {
-            Bubble("Instale o Claude Code e entre com a sua conta do Claude para usar o chat pela assinatura.", false, muted: true);
+            Bubble("Não achei o Claude Code neste PC. No PowerShell rode  irm https://claude.ai/install.ps1 | iex  e depois  claude  para entrar com a sua conta. Aí é só perguntar de novo aqui.", false, muted: true);
             return;
         }
         var waiting = Bubble("Pensando…", false, muted: true);
