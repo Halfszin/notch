@@ -163,9 +163,9 @@ export component Notch inherits Window {
     in property <bool> compact;
     out property <length> open-width: root.compact ? 544px : 620px;
     out property <length> open-height: root.compact ? 232px : 262px;
-    // Com música aberta (tocando ou pausada): espaço para as barrinhas. Pausar não encolhe o notch.
     in property <bool> has-media;
-    out property <length> closed-width: root.has-media ? 160px : 132px;
+    // Como no Orbi em C#: barrinhas só enquanto toca; sem música o notch volta ao tamanho de só anel + hora.
+    out property <length> closed-width: root.playing ? 160px : 132px;
     // Visualizador (como o Wallpaper Engine): 4 faixas do som e o grave, que faz o notch fechado pulsar.
     in property <[float]> bands: [0, 0, 0, 0, 0];
     in property <float> level;
@@ -315,7 +315,7 @@ export component Notch inherits Window {
             padding-top: 8px;
             padding-bottom: 8px;
             Ring { value: root.battery; tint: root.ring-color; bolt: root.charging; }
-            if root.has-media : AudioBars { playing: true; bands: root.bands; tint: #30D158; }
+            if root.playing : AudioBars { playing: true; bands: root.bands; tint: #30D158; }
             Text { text: root.closed-text; color: root.focus-running ? #FF9F0A : white; font-size: 13px; font-weight: 600; vertical-alignment: center; }
         }
 
