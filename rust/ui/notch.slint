@@ -282,7 +282,8 @@ export component Notch inherits Window {
     property <length> bump: !root.open && !root.toasting && root.playing ? root.level * 6px : 0px;
     pill := Rectangle {
         width: root.pill-w + root.bump;
-        height: root.pill-h + root.bump / 3;
+        // Só a largura pulsa: com a altura junto, a hora descia e o anel e as barrinhas ficavam parados.
+        height: root.pill-h;
         x: (root.width - self.width) / 2;
         y: 0;
         border-bottom-left-radius: root.open ? 30px : 16px;

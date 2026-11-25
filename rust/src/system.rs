@@ -100,7 +100,7 @@ pub fn setup(notch: &Notch) {
                 (n.get_toast_width(), n.get_toast_height())
             } else {
                 // Folga para o pulso do grave não ser cortado pela borda da janela.
-                (n.get_closed_width() + 8.0, n.get_closed_height() + 3.0)
+                (n.get_closed_width() + 8.0, n.get_closed_height())
             };
             if open {
                 close_at.set(None);
