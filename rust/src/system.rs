@@ -99,8 +99,8 @@ pub fn setup(notch: &Notch) {
             } else if n.get_toasting() {
                 (n.get_toast_width(), n.get_toast_height())
             } else {
-                // Folga para o pulso do grave não ser cortado pela borda da janela.
-                (n.get_closed_width() + 8.0, n.get_closed_height())
+                // Folga para o pulso (até ~9% maior) não ser cortado pela borda da janela.
+                (n.get_closed_width() * 1.1 + 2.0, n.get_closed_height() * 1.1 + 2.0)
             };
             if open {
                 close_at.set(None);
@@ -135,7 +135,7 @@ pub fn setup(notch: &Notch) {
 
     // Visualizador (como o Wallpaper Engine): 4 faixas do som que está saindo; barrinhas do notch fechado,
     // pulso do notch e do avatar no grave. Sem captura (formato estranho, sem saída): medidor de volume.
-    static BANDS: [AtomicU32; 4] = [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)];
+    static BANDS: [AtomicU32; crate::spectrum::BANDS] = [const { AtomicU32::new(0) }; crate::spectrum::BANDS];
     std::thread::spawn(|| loop {
         let mut ring: std::collections::VecDeque<f32> = std::collections::VecDeque::with_capacity(crate::spectrum::N * 2);
         let mut norm = crate::spectrum::Normalizer::new();
@@ -165,20 +165,27 @@ pub fn setup(notch: &Notch) {
         }
     });
     let weak = notch.as_weak();
-    let shown = std::rc::Rc::new(std::cell::Cell::new([0f32; 4]));
+    let shown = std::rc::Rc::new(std::cell::Cell::new([0f32; crate::spectrum::BANDS]));
+    let detector = std::rc::Rc::new(std::cell::RefCell::new(crate::spectrum::BeatDetector::new()));
+    let started = std::time::Instant::now();
     let beat = Timer::default();
-    beat.start(TimerMode::Repeated, Duration::from_millis(30), move || {
+    // ~60 vezes por segundo, como no Orbi em C# (o detector de batida foi calibrado nesse ritmo).
+    beat.start(TimerMode::Repeated, Duration::from_millis(16), move || {
         let Some(n) = weak.upgrade() else { return };
         if !n.get_has_media() { return; }
+        let playing = n.get_playing();
         let mut cur = shown.get();
         for (c, slot) in cur.iter_mut().zip(&BANDS) {
-            let target = if n.get_playing() { f32::from_bits(slot.load(Relaxed)) } else { 0.0 };
+            let target = if playing { f32::from_bits(slot.load(Relaxed)) } else { 0.0 };
             // Sobe rápido e desce suave, como os visualizadores do Wallpaper Engine.
-            *c = if target > *c { *c + (target - *c) * 0.7 } else { *c * 0.82 };
+            *c = if target > *c { *c + (target - *c) * 0.6 } else { *c * 0.85 };
         }
         shown.set(cur);
+        let bass = if playing { f32::from_bits(BANDS[0].load(Relaxed)) } else { 0.0 };
+        let pulse = detector.borrow_mut().process(bass, started.elapsed().as_millis() as i64);
         n.set_bands(slint::ModelRc::new(slint::VecModel::from(cur.to_vec())));
         n.set_level(cur[0]);
+        n.set_pulse(if playing { pulse } else { 0.0 });
     });
     std::mem::forget(beat);
 

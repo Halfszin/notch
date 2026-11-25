@@ -135,7 +135,7 @@ component AudioBars inherits HorizontalLayout {
     property <duration> t: animation-tick();
     spacing: 2px;
     alignment: center;
-    for i in [0, 1, 2, 3] : Rectangle {
+    for i in (root.bands.length > 0 ? root.bands.length : 4) : Rectangle {
         width: 3px;
         height: root.bands.length > 0 ? 3px + 11px * min(1, root.bands[i])
             : root.playing ? 4px + 10px * abs(sin(root.t / 1ms * 0.4deg + i * 70deg)) : 4px;
@@ -167,8 +167,10 @@ export component Notch inherits Window {
     in property <bool> has-media;
     out property <length> closed-width: root.has-media ? 160px : 132px;
     // Visualizador (como o Wallpaper Engine): 4 faixas do som e o grave, que faz o notch fechado pulsar.
-    in property <[float]> bands: [0, 0, 0, 0];
+    in property <[float]> bands: [0, 0, 0, 0, 0];
     in property <float> level;
+    // Batida (0 a 1): salta no bumbo e cai rápido.
+    in property <float> pulse;
     out property <length> closed-height: 32px;
 
     in-out property <bool> adding;
@@ -278,12 +280,14 @@ export component Notch inherits Window {
     property <length> pill-w: root.open ? root.open-width : root.toasting ? root.toast-width : root.closed-width;
     property <length> pill-h: root.open ? root.open-height : root.toasting ? root.toast-height : root.closed-height;
     animate pill-w, pill-h { duration: 420ms; easing: ease-out-back; }
-    // Fechado com música: o grave empurra o notch alguns pixels (sem a animação lenta de abrir).
-    property <length> bump: !root.open && !root.toasting && root.playing ? root.level * 6px : 0px;
+    // Como no Orbi em C#: fechado, o notch inteiro (anel, barrinhas e hora juntos) cresce com o grave
+    // e dá um tranco na batida; aberto fica parado para não atrapalhar os botões.
+    property <float> beat-scale: root.open ? 1 : 1 + 0.04 * root.level + 0.05 * root.pulse;
     pill := Rectangle {
-        width: root.pill-w + root.bump;
-        // Só a largura pulsa: com a altura junto, a hora descia e o anel e as barrinhas ficavam parados.
+        width: root.pill-w;
         height: root.pill-h;
+        transform-scale: root.beat-scale;
+        transform-origin: { x: self.width / 2, y: 0 };
         x: (root.width - self.width) / 2;
         y: 0;
         border-bottom-left-radius: root.open ? 30px : 16px;
