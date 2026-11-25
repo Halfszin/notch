@@ -520,9 +520,10 @@ export component Notch inherits Window {
 
                 // ---- página: calendário ----
                 if root.page == 3 : VerticalLayout {
-                    spacing: 4px;
+                    // Compacto: linhas mais baixas para as 6 semanas caberem acima das bolinhas.
+                    spacing: root.compact ? 1px : 4px;
                     HorizontalLayout {
-                        height: 26px;
+                        height: root.compact ? 22px : 26px;
                         Text { text: root.month-name; color: white; font-size: 14px; font-weight: 700; vertical-alignment: center; }
                         IconButton { glyph: "\u{E76B}"; size: 11px; clicked => { root.month-prev(); } }
                         IconButton { glyph: "\u{E76C}"; size: 11px; clicked => { root.month-next(); } }
@@ -533,7 +534,7 @@ export component Notch inherits Window {
                     for row in 6 : HorizontalLayout {
                         for col in 7 : Rectangle {
                             property <DayCell> cell: root.days[row * 7 + col];
-                            height: 21px;
+                            height: root.compact ? 17px : 21px;
                             border-radius: 6px;
                             background: self.cell.today ? white : transparent;
                             Text {
