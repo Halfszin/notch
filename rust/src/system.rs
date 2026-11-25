@@ -1,12 +1,14 @@
 // Janela, hora, bateria e mouse: o que o Windows sabe e o notch mostra.
 use slint::winit_030::{winit, WinitWindowAccessor};
+use winit::platform::windows::WindowExtWindows;
+use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
 use slint::{ComponentHandle, Timer, TimerMode};
 use std::time::Duration;
 use windows::Win32::Foundation::{HWND, POINT};
 use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetCursorPos, GetSystemMetrics, GetWindowLongPtrW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, GWL_EXSTYLE, HWND_TOPMOST,
-    SM_CXSCREEN, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, ShowWindow, SW_HIDE, SW_SHOWNOACTIVATE, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    SM_CXSCREEN, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
 };
 
 use crate::Notch;
@@ -21,11 +23,9 @@ pub fn setup(notch: &Notch) {
                 unsafe {
                     let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
                     SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | WS_EX_TOOLWINDOW.0 as isize | WS_EX_NOACTIVATE.0 as isize);
-                    // O Windows só tira da barra de tarefas quando a janela reaparece com o estilo novo.
-                    let _ = ShowWindow(hwnd, SW_HIDE);
-                    let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
                 }
             }
+            w.set_skip_taskbar(true);
             let screen_w = unsafe { GetSystemMetrics(SM_CXSCREEN) };
             let size = w.outer_size();
             w.set_outer_position(winit::dpi::PhysicalPosition::new((screen_w - size.width as i32) / 2, 0));
@@ -132,6 +132,32 @@ pub fn setup(notch: &Notch) {
     });
     std::mem::forget(fast); // o timer vive enquanto o app viver
 
+    // Volume do som agora: as barrinhas do notch fechado e o avatar pulam com a música.
+    static PEAK: AtomicU32 = AtomicU32::new(0);
+    std::thread::spawn(|| {
+        let mut meter = None;
+        for i in 0u64.. {
+            if i % 100 == 0 { meter = crate::winapi::peak_meter(); } // a cada 3 s: pega a saída de som atual
+            let v = meter.as_ref().and_then(|m| unsafe { m.GetPeakValue() }.ok()).unwrap_or(0.0);
+            PEAK.store(v.to_bits(), Relaxed);
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    });
+    let weak = notch.as_weak();
+    let level = std::rc::Rc::new(std::cell::Cell::new(0f32));
+    let beat = Timer::default();
+    beat.start(TimerMode::Repeated, Duration::from_millis(30), move || {
+        let Some(n) = weak.upgrade() else { return };
+        let target = (f32::from_bits(PEAK.load(Relaxed)) * 1.4).min(1.0);
+        let now = level.get();
+        // Sobe rápido e desce suave (como no Orbi em C#).
+        let next = if target > now { now + (target - now) * 0.6 } else { now * 0.85 };
+        level.set(next);
+        let shown = if n.get_playing() { next } else { 0.0 };
+        if (shown - n.get_level()).abs() > 0.005 { n.set_level(shown); }
+    });
+    std::mem::forget(beat);
+
     // A cada segundo: hora, data, bateria e "sempre por cima" (o Windows às vezes tira, ex.: Alt+Tab).
     let weak = notch.as_weak();
     let slow = Timer::default();
@@ -151,6 +177,8 @@ pub fn setup(notch: &Notch) {
             if let Some(hwnd) = hwnd_of(w) {
                 unsafe { let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE); }
             }
+            // O botão na barra de tarefas às vezes volta (ex.: quando outra janela do Orbi abre).
+            w.set_skip_taskbar(true);
         });
     };
     tick();

@@ -94,7 +94,7 @@ jobs:
           Start-Sleep 1
           Shot "12-roda-de-novo"
           # Engrenagem (ao lado do X) abre as configurações.
-          Click (($w + 620) / 2 - 88) 22
+          Click (($w + 620) / 2 - 91) 22
           Start-Sleep 1
           Shot "13-configuracoes"
           "vivo=$(-not $p.HasExited)" | Out-File ci\resultado.txt -Append
@@ -106,6 +106,21 @@ jobs:
           Start-Sleep 3
           "segunda_copia_fechou=$($p2.HasExited)" | Out-File ci\resultado.txt -Append
           Shot "15-segunda-copia"
+          # Notch Compacto (configuração salva no rust-config.json): abre e passa pelas páginas pela seta.
+          Get-Process orbi -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep 1
+          '{"compact":true}' | Set-Content "$env:APPDATA\Orbi\rust-config.json" -Encoding ascii
+          New-Item -ItemType Directory run2 -Force | Out-Null
+          Copy-Item target\release\orbi.exe run2\orbi.exe
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 900, 700
+          $p3 = Start-Process run2\orbi.exe -ArgumentList "--startup" -PassThru
+          Start-Sleep 5
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($w / 2)), 10
+          Start-Sleep 2
+          Shot "c0-compacto"
+          foreach ($i in 1..7) { Click (($w + 544) / 2 - 22) 116; Shot "c$i-compacto" }
+          "compacto_vivo=$(-not $p3.HasExited)" | Out-File ci\resultado.txt -Append
+          if (-not $p3.HasExited) { Stop-Process $p3 -Force }
           Shot "14-atualizado"
           if (Test-Path "$env:APPDATA\Orbi\rust-erro.log") { Copy-Item "$env:APPDATA\Orbi\rust-erro.log" ci\erro.log }
           if (Test-Path "$env:APPDATA\Orbi\rust-diag.txt") { Copy-Item "$env:APPDATA\Orbi\rust-diag.txt" ci\diag.txt }
@@ -125,6 +140,21 @@ jobs:
           if (-not (Select-String -Path ci\resultado.txt -Pattern 'vivo=True' -Quiet)) { exit 1 }
           if (Test-Path ci\erro.log) { Get-Content ci\erro.log; exit 1 }
 
+      - name: Instalador
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          $env:ORBI_VERSION = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          & $iscc installer.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          # Instala em silêncio e confere que o Orbi foi para a pasta do usuário.
+          Start-Process dist\OrbiRustSetup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          $installed = "$env:LOCALAPPDATA\Programs\Orbi Rust\OrbiRust.exe"
+          Start-Sleep 3
+          Get-Process OrbiRust -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not (Test-Path $installed)) { Write-Error "não instalou"; exit 1 }
+
       - name: Publicar a prévia
         shell: bash
         env:
@@ -132,12 +162,13 @@ jobs:
         run: |
           cp target/release/orbi.exe Orbi-rust.exe
           echo "$GITHUB_SHA" > versao.txt
+          cp dist/OrbiRustSetup.exe OrbiRustSetup.exe
           # A etiqueta aponta para o main: o GitHub recusa (às vezes como erro 500) criar etiqueta num commit
           # cujos arquivos de workflow diferem dos do main, o que acontece quando chega um push novo no meio.
           for i in 1 2 3; do
             # O .exe sobe antes do versao.txt: quem vê a versão nova já encontra o .exe novo.
-            gh release upload rust-preview Orbi-rust.exe --clobber && gh release upload rust-preview versao.txt --clobber && exit 0
-            gh release create rust-preview Orbi-rust.exe versao.txt --target main --prerelease --title "Orbi em Rust (preview)" \
+            gh release upload rust-preview Orbi-rust.exe OrbiRustSetup.exe --clobber && gh release upload rust-preview versao.txt --clobber && exit 0
+            gh release create rust-preview Orbi-rust.exe OrbiRustSetup.exe versao.txt --target main --prerelease --title "Orbi em Rust (preview)" \
               --notes "Preview da versao em Rust. Nao substitui o Orbi atual: baixe e abra o Orbi-rust.exe para testar." && exit 0
             sleep $((i * 10))
           done

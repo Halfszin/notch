@@ -20,11 +20,12 @@ pub struct Prefs {
     pub lyrics: bool,
     pub gradient: bool,
     pub auto_update: bool,
+    pub compact: bool,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { battery_alerts: true, audio_alerts: true, reminders: true, lyrics: true, gradient: true, auto_update: true }
+        Prefs { battery_alerts: true, audio_alerts: true, reminders: true, lyrics: true, gradient: true, auto_update: true, compact: false }
     }
 }
 
@@ -45,6 +46,7 @@ pub fn get() -> Prefs {
 pub fn setup(notch: &Notch) {
     let prefs = get();
     notch.set_gradient_enabled(prefs.gradient);
+    notch.set_compact(prefs.compact);
     updater::AUTO.store(prefs.auto_update, Ordering::Relaxed);
     NOTCH.with(|n| *n.borrow_mut() = Some(notch.as_weak()));
     notch.on_open_settings(show);
@@ -108,11 +110,13 @@ pub fn show() {
                     lyrics: w.get_lyrics(),
                     gradient: w.get_gradient(),
                     auto_update: w.get_auto_update(),
+                    compact: w.get_compact(),
                 };
                 crate::store::save(FILE, &prefs);
                 updater::AUTO.store(prefs.auto_update, Ordering::Relaxed);
                 if let Some(n) = NOTCH.with(|n| n.borrow().as_ref().and_then(|w| w.upgrade())) {
                     n.set_gradient_enabled(prefs.gradient);
+                    n.set_compact(prefs.compact);
                     if !prefs.lyrics { n.set_has_lyrics(false); }
                 }
                 PREFS.with(|p| *p.borrow_mut() = prefs);
@@ -139,6 +143,7 @@ pub fn show() {
         w.set_lyrics(p.lyrics);
         w.set_gradient(p.gradient);
         w.set_auto_update(p.auto_update);
+        w.set_compact(p.compact);
         w.set_start_with_windows(autostart());
         STATUS.with(|s| {
             let s = s.borrow();

@@ -135,12 +135,16 @@ component Pill inherits Rectangle {
 // Barrinhas de áudio do canto (animam quando toca).
 component AudioBars inherits HorizontalLayout {
     in property <bool> playing;
+    // Volume do som agora (0 a 1); -1 = só a animação (barrinhas do topo do notch aberto).
+    in property <float> level: -1;
     property <duration> t: animation-tick();
     spacing: 2px;
     alignment: center;
     for i in [0, 1, 2, 3] : Rectangle {
         width: 3px;
-        height: root.playing ? 4px + 10px * abs(sin(root.t / 1ms * 0.4deg + i * 70deg)) : 4px;
+        height: !root.playing ? 4px
+            : root.level < 0 ? 4px + 10px * abs(sin(root.t / 1ms * 0.4deg + i * 70deg))
+            : 3px + 11px * min(1, root.level * (0.55 + 0.45 * abs(sin(root.t / 1ms * 0.5deg + i * 80deg))));
         y: (16px - self.height) / 2;
         border-radius: 1.5px;
         background: white;
@@ -161,9 +165,13 @@ export component Notch inherits Window {
     default-font-family: "Segoe UI";
 
     // Tamanhos do notch (o Rust usa os mesmos números para saber onde o clique vale).
-    out property <length> open-width: 620px;
-    out property <length> open-height: 262px;
-    out property <length> closed-width: 132px;
+    // Grande ou compacto (configurações), com as medidas do Orbi em C#.
+    in property <bool> compact;
+    out property <length> open-width: root.compact ? 544px : 620px;
+    out property <length> open-height: root.compact ? 232px : 262px;
+    // Tocando música: abre espaço para as barrinhas que pulam com o som.
+    out property <length> closed-width: root.playing ? 160px : 132px;
+    in property <float> level;
     out property <length> closed-height: 32px;
 
     in-out property <bool> adding;
@@ -298,6 +306,7 @@ export component Notch inherits Window {
             padding-top: 8px;
             padding-bottom: 8px;
             Ring { value: root.battery; tint: root.ring-color; bolt: root.charging; }
+            if root.playing : AudioBars { playing: true; level: root.level; }
             Text { text: root.closed-text; color: root.focus-running ? #FF9F0A : white; font-size: 13px; font-weight: 600; vertical-alignment: center; }
         }
 
@@ -344,9 +353,11 @@ export component Notch inherits Window {
                     width: 150px;
                     alignment: end;
                     spacing: 6px;
-                    AudioBars { playing: root.playing; }
-                    IconButton { glyph: "\u{E713}"; size: 10px; tint: #8E8E93; width: 24px; height: 24px; clicked => { root.open-settings(); } }
-                    IconButton { glyph: "\u{E711}"; size: 10px; tint: #8E8E93; width: 24px; height: 24px; clicked => { root.quit(); } }
+                    // Barrinhas só com música tocando (parado eram só 4 pontinhos sem uso).
+                    if root.playing : AudioBars { playing: true; }
+                    // Na fonte de ícones a engrenagem desenha menor que o X: tamanhos diferentes para ficarem iguais na tela.
+                    IconButton { glyph: "\u{E713}"; size: 13px; tint: #AEAEB2; width: 26px; height: 24px; clicked => { root.open-settings(); } }
+                    IconButton { glyph: "\u{E711}"; size: 11px; tint: #AEAEB2; width: 26px; height: 24px; clicked => { root.quit(); } }
                 }
             }
 
@@ -355,11 +366,11 @@ export component Notch inherits Window {
                 // ---- página: música ----
                 if root.page == 0 : HorizontalLayout {
                     spacing: 16px;
-                    if !(root.show-lyrics && root.has-lyrics) : Avatar { width: 140px; look-x: root.look-x; look-y: root.look-y; }
+                    if !(root.show-lyrics && root.has-lyrics) : Avatar { width: root.compact ? 96px : 140px; look-x: root.look-x; look-y: root.look-y; pulse: root.playing ? root.level : 0; }
                     VerticalLayout {
                         alignment: center;
                         spacing: 10px;
-                        width: root.show-lyrics && root.has-lyrics ? 260px : 360px;
+                        width: root.show-lyrics && root.has-lyrics ? 260px : root.compact ? 340px : 360px;
                         HorizontalLayout {
                             spacing: 12px;
                             Rectangle {
@@ -781,6 +792,7 @@ export component Settings inherits Window {
     in-out property <bool> lyrics: true;
     in-out property <bool> gradient: true;
     in-out property <bool> auto-update: true;
+    in-out property <bool> compact;
     in property <string> version;
     in property <string> update-status;
     in property <bool> update-ready;
@@ -882,6 +894,32 @@ export component Settings inherits Window {
                         s0 := SectionLabel { text: "NOTCH"; height: 46px; vertical-alignment: bottom; }
                         Rectangle { height: 10px; }
                         Card {
+                            Row {
+                                title: "Tamanho do notch aberto";
+                                sub: "Grande deixa mais espaço para as listas, a letra e o calendário.";
+                                VerticalLayout {
+                                    alignment: center;
+                                    Rectangle {
+                                        height: 32px;
+                                        width: seg.preferred-width + 6px;
+                                        border-radius: 8px;
+                                        background: #1C1C1F;
+                                        seg := HorizontalLayout {
+                                            x: 3px;
+                                            padding-top: 3px;
+                                            padding-bottom: 3px;
+                                            for opt[i] in ["Grande", "Compacto"] : Rectangle {
+                                                width: t.preferred-width + 32px;
+                                                border-radius: 6px;
+                                                background: (i == 1) == root.compact ? #3A3A3E : transparent;
+                                                t := Text { text: opt; font-size: 13px; color: (i == 1) == root.compact ? white : #C7C7CC; horizontal-alignment: center; vertical-alignment: center; }
+                                                TouchArea { mouse-cursor: pointer; clicked => { root.compact = i == 1; root.changed(); } }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Divider { }
                             SwitchRow {
                                 title: "Iniciar com o Windows";
                                 sub: "O notch aparece sozinho quando você liga o PC, sem abrir esta tela.";

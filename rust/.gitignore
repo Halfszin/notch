@@ -1,1 +1,5 @@
 target/
+dist/
+run/
+run2/
+ci/
