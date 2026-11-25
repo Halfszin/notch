@@ -7,16 +7,19 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Orbi</AssemblyName>
-    <Version>1.9.0</Version>
+    <Version>2.0.0</Version>
     <ApplicationIcon>orbi.ico</ApplicationIcon>
     <DefaultItemExcludes>$(DefaultItemExcludes);web/node_modules/**;tests/**;publish/**;dist/**;ci/**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+    <PackageReference Include="NAudio.WinMM" Version="2.2.1" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3537.50" />
     <PackageReference Include="Anthropic" Version="13.13.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.11" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <PackageReference Include="Whisper.net" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="orbi.ico" />

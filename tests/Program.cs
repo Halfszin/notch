@@ -180,6 +180,37 @@ if (AgentHub.LastAssistantText(transcript) != "Migração aplicada, 14 testes pa
 if (AgentHub.LastAssistantText("/nao/existe.jsonl") != null) failures.Add("última mensagem: arquivo que não existe");
 File.Delete(transcript);
 
+// ---- Ditado: atalhos de texto, trocas, estatísticas ----
+var snippets = DictationText.ParsePairs("meu email => rafa@exemplo.com\n# comentário\nassinatura => Abraços,\\nRafael\nlinha sem seta");
+var swaps = DictationText.ParsePairs("cloud code => Claude Code\norbe => Orbi");
+if (snippets.Count != 2) failures.Add($"ditado: {snippets.Count} atalhos lidos");
+if (DictationText.Apply(" Meu e-mail. ", snippets, swaps) != "rafa@exemplo.com") failures.Add("ditado: atalho com hífen (o reconhecimento escreve e-mail)");
+if (DictationText.Apply("Meu email.", snippets, swaps) != "rafa@exemplo.com") failures.Add("ditado: atalho de texto");
+if (DictationText.Apply("Assinatura!", snippets, swaps) != "Abraços,\nRafael") failures.Add("ditado: atalho com quebra de linha");
+if (DictationText.Apply("abre o cloud code e o Orbe", snippets, swaps) != "abre o Claude Code e o Orbi") failures.Add("ditado: trocas: " + DictationText.Apply("abre o cloud code e o Orbe", snippets, swaps));
+if (DictationText.Apply("orbes", snippets, swaps) != "orbes") failures.Add("ditado: troca pegou pedaço de palavra");
+if (DictationText.Words("Olá, mundo! Tudo bem? 123") != 5) failures.Add("ditado: contagem de palavras");
+if (DictationText.Saved(80, TimeSpan.FromSeconds(30)) != TimeSpan.FromSeconds(90)) failures.Add("ditado: tempo poupado");
+var d0 = new DateTime(2026, 11, 25);
+if (DictationText.Streak(new[] { d0, d0.AddDays(-1), d0.AddDays(-2), d0.AddDays(-4) }, d0) != 3) failures.Add("ditado: dias seguidos");
+if (DictationText.Streak(new[] { d0.AddDays(-1), d0.AddDays(-2) }, d0) != 2) failures.Add("ditado: dias seguidos sem hoje");
+
+// ---- Reconhecimento de voz (só quando o CI fornece modelo e áudio: ORBI_WHISPER_MODEL e ORBI_WHISPER_WAV) ----
+if (Environment.GetEnvironmentVariable("ORBI_WHISPER_MODEL") is { Length: > 0 } model && Environment.GetEnvironmentVariable("ORBI_WHISPER_WAV") is { Length: > 0 } wavPath)
+{
+    using var reader = new NAudio.Wave.WaveFileReader(wavPath);
+    var provider = NAudio.Wave.WaveExtensionMethods.ToSampleProvider(reader);
+    var samples = new List<float>();
+    var buf = new float[reader.WaveFormat.SampleRate];
+    int read;
+    while ((read = provider.Read(buf, 0, buf.Length)) > 0) samples.AddRange(buf.Take(read));
+    using var tr = new Transcriber(model);
+    string heard = await tr.Transcribe(samples.ToArray(), "en", null);
+    Console.WriteLine("transcrito: " + heard);
+    var lower = heard.ToLowerInvariant();
+    if (!(lower.Contains("weather") && lower.Contains("today"))) failures.Add("voz: transcrição inesperada: " + heard);
+}
+
 foreach (var f in failures) Console.WriteLine("FALHA " + f);
 ok &= failures.Count == 0;
 Console.WriteLine(ok ? "OK" : "FALHOU");

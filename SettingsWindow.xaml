@@ -281,6 +281,74 @@
                         </StackPanel>
                     </Border>
 
+                    <TextBlock Text="DITADO (VOZ)" Style="{StaticResource Label}"/>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <Grid Style="{StaticResource Row}">
+                                <StackPanel Margin="0,0,80,0">
+                                    <TextBlock Text="Ditar em qualquer programa" Style="{StaticResource RowTitle}"/>
+                                    <TextBlock Text="Segure Ctrl direito, fale e solte: o texto é colado onde o cursor está. Esc ou outra tecla junto cancela. O reconhecimento roda no seu PC e o áudio não sai daqui." Style="{StaticResource RowSub}"/>
+                                </StackPanel>
+                                <CheckBox x:Name="DictSwitch" Style="{StaticResource Switch}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          AutomationProperties.Name="Ditado" Click="Dict_Click"/>
+                            </Grid>
+                            <Border Height="1" Background="#232326" Margin="18,0"/>
+                            <Grid Style="{StaticResource Row}">
+                                <StackPanel Margin="0,0,300,0">
+                                    <TextBlock Text="Modelo de voz" Style="{StaticResource RowTitle}"/>
+                                    <TextBlock x:Name="ModelStatus" Style="{StaticResource RowSub}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                    <Border Background="#232326" CornerRadius="8" Padding="3">
+                                        <StackPanel Orientation="Horizontal">
+                                            <RadioButton x:Name="ModelBase" Content="Rápido" Style="{StaticResource Seg}" GroupName="Model" Tag="base" Checked="Model_Checked"/>
+                                            <RadioButton x:Name="ModelSmall" Content="Preciso" Style="{StaticResource Seg}" GroupName="Model" Tag="small" Checked="Model_Checked"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Button x:Name="ModelBtn" Content="Baixar" Style="{StaticResource PillBtn}" Margin="8,0,0,0" Click="DownloadModel_Click"/>
+                                </StackPanel>
+                            </Grid>
+                            <Border Height="1" Background="#232326" Margin="18,0"/>
+                            <StackPanel Margin="18,14">
+                                <TextBlock Text="Dicionário" Style="{StaticResource RowTitle}"/>
+                                <TextBlock Text="Nomes e termos que o ditado deve escrever certo, um por linha." Style="{StaticResource RowSub}"/>
+                                <Border Background="#232326" CornerRadius="8" Padding="10,6" Margin="0,8,0,0">
+                                    <TextBox x:Name="DictWordsBox" Background="Transparent" Foreground="White" CaretBrush="White" BorderThickness="0" FontSize="13"
+                                             AcceptsReturn="True" TextWrapping="Wrap" Height="62" VerticalScrollBarVisibility="Auto"
+                                             AutomationProperties.Name="Dicionário" LostFocus="DictText_LostFocus"/>
+                                </Border>
+                            </StackPanel>
+                            <Border Height="1" Background="#232326" Margin="18,0"/>
+                            <StackPanel Margin="18,14">
+                                <TextBlock Text="Trocas" Style="{StaticResource RowTitle}"/>
+                                <TextBlock Text="Quando ouvir uma coisa, escreve outra. Uma por linha, assim: cloud code => Claude Code" Style="{StaticResource RowSub}"/>
+                                <Border Background="#232326" CornerRadius="8" Padding="10,6" Margin="0,8,0,0">
+                                    <TextBox x:Name="DictSwapsBox" Background="Transparent" Foreground="White" CaretBrush="White" BorderThickness="0" FontSize="13"
+                                             AcceptsReturn="True" TextWrapping="Wrap" Height="62" VerticalScrollBarVisibility="Auto"
+                                             AutomationProperties.Name="Trocas" LostFocus="DictText_LostFocus"/>
+                                </Border>
+                            </StackPanel>
+                            <Border Height="1" Background="#232326" Margin="18,0"/>
+                            <StackPanel Margin="18,14">
+                                <TextBlock Text="Atalhos de texto" Style="{StaticResource RowTitle}"/>
+                                <TextBlock Text="Fale a frase curta e cola o texto inteiro. Ex.: meu email => voce@exemplo.com (\n vira quebra de linha)" Style="{StaticResource RowSub}"/>
+                                <Border Background="#232326" CornerRadius="8" Padding="10,6" Margin="0,8,0,0">
+                                    <TextBox x:Name="DictSnippetsBox" Background="Transparent" Foreground="White" CaretBrush="White" BorderThickness="0" FontSize="13"
+                                             AcceptsReturn="True" TextWrapping="Wrap" Height="62" VerticalScrollBarVisibility="Auto"
+                                             AutomationProperties.Name="Atalhos de texto" LostFocus="DictText_LostFocus"/>
+                                </Border>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="ESTATÍSTICAS DO DITADO" Style="{StaticResource Label}"/>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel Margin="18,14">
+                            <TextBlock x:Name="DictStats" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="DictRecent" Style="{StaticResource RowSub}" Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </Border>
+
                     <TextBlock Text="AVATAR" Style="{StaticResource Label}"/>
                     <Border Style="{StaticResource Card}">
                         <Grid Style="{StaticResource Row}">

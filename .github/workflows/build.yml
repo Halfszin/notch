@@ -23,11 +23,26 @@ jobs:
           $v = (Select-Xml -Path Orbi.csproj -XPath '//Version').Node.InnerText
           "ORBI_VERSION=$v" >> $env:GITHUB_ENV
 
-      - name: Teste da detecção de batida
+      - name: Áudio e modelo de voz para o teste do ditado
+        shell: powershell
+        run: |
+          try {
+            Invoke-WebRequest "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin" -OutFile "$env:RUNNER_TEMP\ggml-tiny.bin"
+            Add-Type -AssemblyName System.Speech
+            $s = New-Object System.Speech.Synthesis.SpeechSynthesizer
+            $fmt = New-Object System.Speech.AudioFormat.SpeechAudioFormatInfo 16000, ([System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen), ([System.Speech.AudioFormat.AudioChannel]::Mono)
+            $s.SetOutputToWaveFile("$env:RUNNER_TEMP\voz.wav", $fmt)
+            $s.Speak("What is the weather like today")
+            $s.Dispose()
+            "ORBI_WHISPER_MODEL=$env:RUNNER_TEMP\ggml-tiny.bin" | Out-File $env:GITHUB_ENV -Append -Encoding ascii
+            "ORBI_WHISPER_WAV=$env:RUNNER_TEMP\voz.wav" | Out-File $env:GITHUB_ENV -Append -Encoding ascii
+          } catch { Write-Warning "Sem voz/modelo para o teste do ditado: $_" }
+
+      - name: Testes (batida, tarefas, hooks, agentes, ditado)
         run: dotnet run --project tests
 
       - name: Publicar
-        run: dotnet publish Orbi.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+        run: dotnet publish Orbi.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o publish
 
       - name: Teste rápido (abre o Orbi, passa o mouse no notch e tira prints)
         shell: pwsh
@@ -39,6 +54,13 @@ jobs:
             $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
             [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
             $bmp.Save("ci\$name.png")
+          }
+          # Ditado no .exe publicado (confere que a biblioteca de voz carrega dentro do executável único).
+          if ($env:ORBI_WHISPER_MODEL) {
+            Start-Process publish\Orbi.exe -ArgumentList "--testar-ditado", "`"$env:ORBI_WHISPER_MODEL`"", "`"$env:ORBI_WHISPER_WAV`"" -Wait
+            $heard = Get-Content "$env:APPDATA\Orbi\teste-ditado.txt" -Raw
+            "$heard" | Out-File ci\ditado.txt
+            if ("$heard" -notmatch "weather") { "ditado no .exe falhou: $heard" | Out-File ci\erros.log -Append }
           }
           # Dados de exemplo: cidade (clima), atalhos e uma tarefa que vence durante o teste (lembrete).
           $dir = "$env:APPDATA\Orbi"

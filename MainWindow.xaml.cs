@@ -57,6 +57,7 @@ public partial class MainWindow : Window
     readonly AudioWatcher _audioWatcher = new();
     int _lowWarnAt = 20;
     readonly NotificationWatcher _notifications = new();
+    public readonly Dictation Dictation = new();
     public readonly AgentHub Agents = new();
     public AgentServer? AgentServer { get; private set; }
     readonly DispatcherTimer _look = new() { Interval = TimeSpan.FromMilliseconds(80) };
@@ -93,6 +94,7 @@ public partial class MainWindow : Window
         };
         AiView.Thinking += on => { if (on) React("thinking", 120); else React("happy", 2); };
         StartAgents();
+        StartDictation();
         AiView.Hub = Agents;
         // Olhos do avatar seguem o mouse enquanto o notch está aberto.
         _look.Tick += (_, _) => LookAtCursor();
@@ -411,6 +413,32 @@ public partial class MainWindow : Window
             Toast("\uE7E7", $"{project}: {message}", new SolidColorBrush(Color.FromRgb(0xFF, 0x9F, 0x0A)), 6);
             React("notifying", 3);
         };
+    }
+
+    // ---------- ditado ----------
+
+    void StartDictation()
+    {
+        var red = new SolidColorBrush(Color.FromRgb(0xFF, 0x45, 0x3A));
+        Dictation.Listening += on => Dispatcher.BeginInvoke(() =>
+        {
+            if (on) { Toast("\uE720", "Ouvindo… solte o Ctrl direito para colar", red, 600); React("listening", 600); }
+            else HideToast();
+        });
+        Dictation.Working += on => Dispatcher.BeginInvoke(() =>
+        {
+            if (on) { Toast("\uE70F", "Escrevendo…", null, 600); React("dictating", 120); }
+            else { HideToast(); React("happy", 1.5); }
+        });
+        Dictation.Failed += message => Dispatcher.BeginInvoke(() => Toast("\uE7BA", message, red, 6));
+        Dictation.Enable(Config.Current.Dictation);
+    }
+
+    void HideToast()
+    {
+        _toastTimer.Stop();
+        _toasting = false;
+        if (!_open) Resize(false);
     }
 
     // ---------- evento ao lado do avatar (estilo coucou): permissão ou "terminou" ----------

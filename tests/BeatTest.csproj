@@ -7,6 +7,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NAudio.Core" Version="2.2.1" />
+    <PackageReference Include="Whisper.net" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
     <Compile Include="../BeatDetector.cs" />
     <Compile Include="../SpectrumAnalyzer.cs" />
     <Compile Include="../TaskParser.cs" />
@@ -15,5 +17,7 @@
     <Compile Include="../HookInstaller.cs" />
     <Compile Include="../AgentHub.cs" />
     <Compile Include="../AgentServer.cs" />
+    <Compile Include="../DictationText.cs" />
+    <Compile Include="../Transcriber.cs" />
   </ItemGroup>
 </Project>

@@ -30,6 +30,13 @@ public partial class SettingsWindow : Window
         HotkeySwitch.IsChecked = Config.Current.Hotkeys;
         SoundSwitch.IsChecked = Config.Current.Sounds;
         ShowHotkeyStatus();
+        DictSwitch.IsChecked = Config.Current.Dictation;
+        (Config.Current.VoiceModel == "small" ? ModelSmall : ModelBase).IsChecked = true;
+        DictWordsBox.Text = Config.Current.DictWords;
+        DictSwapsBox.Text = Config.Current.DictReplacements;
+        DictSnippetsBox.Text = Config.Current.DictSnippets;
+        ShowModelStatus();
+        ShowDictStats();
         Loaded += (_, _) => BuildNav();
         foreach (var (tag, name) in new[] { ("calendar", "Calendário"), ("shelf", "Bandeja"), ("clip", "Área de transferência"), ("notes", "Notas"),
                                             ("system", "Sistema"), ("todo", "Tarefas"), ("shortcuts", "Atalhos"), ("ai", "IA") })
@@ -150,7 +157,7 @@ public partial class SettingsWindow : Window
     {
         ["NOTCH"] = "\uE7F4", ["APARÊNCIA"] = "\uE790", ["ATALHOS DE TECLADO"] = "\uE765", ["SONS"] = "\uE767", ["AVATAR"] = "\uE77B",
         ["CLIMA"] = "\uE706", ["INTELIGÊNCIA ARTIFICIAL"] = "\uE99A", ["AGENTES (CLAUDE CODE)"] = "\uE756", ["NOTIFICAÇÕES"] = "\uEA8F",
-        ["ATUALIZAÇÕES"] = "\uE895", ["APP"] = "\uE7E8",
+        ["ATUALIZAÇÕES"] = "\uE895", ["APP"] = "\uE7E8", ["DITADO (VOZ)"] = "\uE720", ["ESTATÍSTICAS DO DITADO"] = "\uE9D2",
     };
 
     // Cada seção = o título (TextBlock com o estilo Label) + o que vem depois até o próximo título.
@@ -264,6 +271,77 @@ public partial class SettingsWindow : Window
     {
         Directory.CreateDirectory(Sounds.Folder);
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Sounds.Folder) { UseShellExecute = true });
+    }
+
+    // ---------- ditado ----------
+
+    CancellationTokenSource? _download;
+
+    void Dict_Click(object s, RoutedEventArgs e)
+    {
+        Config.Current.Dictation = DictSwitch.IsChecked == true;
+        SaveConfig(null, null);
+        App.OrbiWindow.Dictation.Enable(Config.Current.Dictation);
+        ShowModelStatus();
+    }
+
+    void Model_Checked(object s, RoutedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        Config.Current.VoiceModel = (string)((RadioButton)s).Tag;
+        SaveConfig(null, null);
+        ShowModelStatus();
+    }
+
+    void ShowModelStatus()
+    {
+        var m = VoiceModels.All.First(x => x.Id == Config.Current.VoiceModel);
+        bool has = VoiceModels.Has(m.Id);
+        ModelBtn.Visibility = has || _download != null ? Visibility.Collapsed : Visibility.Visible;
+        ModelBtn.Content = $"Baixar ({m.ApproxMb} MB)";
+        if (_download == null)
+            ModelStatus.Text = has
+                ? $"Modelo {m.Name.ToLowerInvariant()} pronto." + (Config.Current.Dictation ? " Segure Ctrl direito para ditar." : " Ligue o ditado acima.")
+                : $"Baixe uma vez ({m.ApproxMb} MB). \"Preciso\" erra menos, mas demora um pouco mais para escrever.";
+    }
+
+    async void DownloadModel_Click(object s, RoutedEventArgs e)
+    {
+        string id = Config.Current.VoiceModel;
+        _download = new CancellationTokenSource();
+        ModelBtn.Visibility = Visibility.Collapsed;
+        try
+        {
+            await VoiceModels.Download(id, new Progress<double>(p => ModelStatus.Text = $"Baixando o modelo de voz… {p:P0}"), _download.Token);
+            _download = null;
+            ShowModelStatus();
+        }
+        catch (Exception ex)
+        {
+            _download = null;
+            ShowModelStatus();
+            ModelStatus.Text = "Não baixou: " + ex.Message;
+        }
+    }
+
+    void DictText_LostFocus(object s, RoutedEventArgs e)
+    {
+        Config.Current.DictWords = DictWordsBox.Text;
+        Config.Current.DictReplacements = DictSwapsBox.Text;
+        Config.Current.DictSnippets = DictSnippetsBox.Text;
+        SaveConfig(null, null);
+    }
+
+    void ShowDictStats()
+    {
+        var st = DictationStats.Load();
+        int today = st.WordsByDay.GetValueOrDefault(DateTime.Today.ToString("yyyy-MM-dd"));
+        int streak = DictationText.Streak(st.WordsByDay.Keys.Select(k => DateTime.TryParse(k, out var d) ? d : DateTime.MinValue), DateTime.Today);
+        var saved = TimeSpan.FromSeconds(st.SavedSeconds);
+        DictStats.Text = st.TotalWords == 0 ? "Você ainda não ditou nada."
+            : $"{today} palavras hoje · {st.TotalWords} no total · {(saved.TotalHours >= 1 ? $"{(int)saved.TotalHours}h{saved.Minutes:00}" : $"{saved.Minutes} min")} economizados · {streak} {(streak == 1 ? "dia seguido" : "dias seguidos")}";
+        var recent = st.Recent.Where(r => r.When.Date == DateTime.Today).Take(5).Select(r => $"{r.When:HH:mm}  {(r.Text.Length > 90 ? r.Text[..90] + "…" : r.Text)}");
+        DictRecent.Text = string.Join("\n", recent);
     }
 
     void Size_Checked(object s, RoutedEventArgs e)

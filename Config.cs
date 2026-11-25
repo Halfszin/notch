@@ -23,7 +23,12 @@ public sealed class Config
     public string Theme { get; set; } = "escuro";              // "escuro" ou "claro"
     public bool AutoHide { get; set; }
     public bool Hotkeys { get; set; } = true;
-    public bool Sounds { get; set; } = true;           // "grande" ou "compacto"
+    public bool Sounds { get; set; } = true;
+    public bool Dictation { get; set; }
+    public string VoiceModel { get; set; } = "base";            // "base" (rápido) ou "small" (preciso)
+    public string DictWords { get; set; } = "Orbi\nClaude Code";    // dicionário: um termo por linha
+    public string DictReplacements { get; set; } = "";              // "de => para", uma por linha
+    public string DictSnippets { get; set; } = "";                  // "frase => texto", uma por linha           // "grande" ou "compacto"
     public List<string> HiddenTabs { get; set; } = new();       // abas tiradas do acesso rápido (tags)
     // Código secreto que vai no endereço dos hooks: sem ele o Orbi recusa o evento.
     public string AgentToken { get; set; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();

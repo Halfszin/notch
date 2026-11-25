@@ -14,6 +14,16 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         Directory.CreateDirectory(Dir);
+        // Diagnóstico: "Orbi.exe --testar-ditado modelo.bin audio.wav" transcreve o áudio e grava em teste-ditado.txt.
+        if (e.Args.Length == 3 && e.Args[0] == "--testar-ditado")
+        {
+            string result;
+            try { result = Task.Run(() => TestDictation(e.Args[1], e.Args[2])).GetAwaiter().GetResult(); }
+            catch (Exception ex) { result = "ERRO: " + ex; }
+            File.WriteAllText(Path.Combine(Dir, "teste-ditado.txt"), result);
+            Shutdown();
+            return;
+        }
         Theme.Apply(Config.Current.Theme);
         // Um erro inesperado vira aviso + linha em erros.log, em vez de fechar o app sem explicação.
         DispatcherUnhandledException += (_, ev) => { ev.Handled = true; Report(ev.Exception); };
@@ -51,6 +61,18 @@ public partial class App : Application
         _reported = true;
         MessageBox.Show($"O Orbi encontrou um erro e continuou aberto.\n\n{ex.Message}\n\nDetalhes em:\n{ErrorLog}",
             "Orbi", MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    static async Task<string> TestDictation(string model, string wav)
+    {
+        using var reader = new NAudio.Wave.WaveFileReader(wav);
+        var provider = NAudio.Wave.WaveExtensionMethods.ToSampleProvider(reader);
+        var samples = new List<float>();
+        var buffer = new float[16000];
+        int n;
+        while ((n = provider.Read(buffer, 0, buffer.Length)) > 0) samples.AddRange(buffer.Take(n));
+        using var transcriber = new Transcriber(model);
+        return await transcriber.Transcribe(samples.ToArray(), "en", null);
     }
 
     public static void OpenSettings()
