@@ -70,8 +70,9 @@ jobs:
           # O GitHub às vezes responde erro 500 passageiro: tenta de novo.
           for i in 1 2 3; do
             gh release upload rust-preview Orbi-rust.exe --clobber && exit 0
-            gh release create rust-preview Orbi-rust.exe --prerelease --title "Orbi em Rust (prévia)" \
-              --notes "Prévia da versão em Rust. Não substitui o Orbi atual: baixe e abra o Orbi-rust.exe para testar." && exit 0
+            # Título e texto sem acento: no Git Bash do Windows os acentos saem quebrados e o GitHub responde 500.
+            gh release create rust-preview Orbi-rust.exe --prerelease --title "Orbi em Rust (preview)" \
+              --notes "Preview da versao em Rust. Nao substitui o Orbi atual: baixe e abra o Orbi-rust.exe para testar." && exit 0
             sleep $((i * 10))
           done
           exit 1
