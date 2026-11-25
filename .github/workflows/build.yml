@@ -140,6 +140,22 @@ jobs:
           Shot "5-lateral"
           if (Test-Path $log) { Copy-Item $log ci\erros.log -Force }
           if (-not $p2.HasExited) { Stop-Process $p2 -Force }
+          # Tema claro: mesmo notch, cores claras.
+          '{"Theme":"claro","City":"São Paulo, São Paulo, Brasil","Latitude":-23.55,"Longitude":-46.63,"AgentPort":47821,"AgentToken":"citoken"}' | Set-Content "$env:APPDATA\Orbi\config.json" -Encoding utf8
+          Set-Content "$env:APPDATA\Orbi\edge.txt" "Top 0.5"
+          $p3 = Start-Process publish\Orbi.exe -ArgumentList "--startup" -PassThru
+          Start-Sleep 8
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($w / 2)), 8
+          Start-Sleep 3
+          Shot "16-claro"
+          try {
+            $c = New-Object System.Windows.Automation.PropertyCondition ([System.Windows.Automation.AutomationElement]::NameProperty), "Calendário"
+            [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $c).GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+            Start-Sleep 1
+            Shot "17-claro-calendario"
+          } catch { "UIA claro: $_" | Out-File ci\uia.txt -Append }
+          if (Test-Path $log) { Copy-Item $log ci\erros.log -Force }
+          if (-not $p3.HasExited) { Stop-Process $p3 -Force }
 
       - name: Guardar o resultado do teste no branch ci-results
         shell: bash

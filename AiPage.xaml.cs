@@ -55,6 +55,12 @@ public partial class AiPage : UserControl
             : "Para perguntar sem pagar nada a mais, instale o Claude Code: no PowerShell rode  irm https://claude.ai/install.ps1 | iex  e depois  claude  para entrar com a sua conta do Claude (Pro ou Max). Ele precisa do Git para Windows (git-scm.com).", false, muted: true);
     }
 
+    public void FocusChat()
+    {
+        ChatMode.IsChecked = true;
+        Dispatcher.BeginInvoke(() => AskInput.Focus(), System.Windows.Threading.DispatcherPriority.Input);
+    }
+
     void NewChat_Click(object s, MouseButtonEventArgs e)
     {
         _pending?.Cancel();
@@ -137,14 +143,16 @@ public partial class AiPage : UserControl
         var box = new TextBox
         {
             Text = text, IsReadOnly = true, BorderThickness = new Thickness(0), Background = Brushes.Transparent, TextWrapping = TextWrapping.Wrap,
-            Foreground = muted ? Brushes.Gray : Brushes.White, FontSize = 13, Padding = new Thickness(0), SelectionBrush = new SolidColorBrush(Color.FromRgb(0x30, 0xD1, 0x58)),
+            FontSize = 13, Padding = new Thickness(0), SelectionBrush = new SolidColorBrush(Color.FromRgb(0x30, 0xD1, 0x58)),
         };
         var bubble = new Border
         {
             Child = box, CornerRadius = new CornerRadius(14), Padding = new Thickness(12, 7, 12, 7), Margin = new Thickness(user ? 80 : 0, 3, user ? 4 : 60, 3),
             HorizontalAlignment = user ? HorizontalAlignment.Right : HorizontalAlignment.Left,
-            Background = new SolidColorBrush(user ? Color.FromRgb(0x2C, 0x2C, 0x33) : Color.FromRgb(0x1B, 0x1B, 0x1F)),
         };
+        // Cores pelo tema (mudam na hora se você trocar entre escuro e claro).
+        bubble.SetResourceReference(Border.BackgroundProperty, user ? "N.Button" : "N.Field");
+        box.SetResourceReference(TextBox.ForegroundProperty, muted ? "N.Sub" : "N.Fg");
         Messages.Children.Add(bubble);
         ChatScroll.ScrollToEnd();
         return bubble;
@@ -217,10 +225,10 @@ public partial class AiPage : UserControl
     void Row(string label, string value, bool muted = false, Panel? target = null)
     {
         var row = new DockPanel { Margin = new Thickness(0, 1, 0, 1) };
-        var v = new TextBlock { Text = value, FontSize = 12, Foreground = Brushes.LightGray, Margin = new Thickness(12, 0, 0, 0) };
+        var v = new TextBlock { Text = value, FontSize = 12, Foreground = Theme.Res("N.Sub"), Margin = new Thickness(12, 0, 0, 0) };
         DockPanel.SetDock(v, Dock.Right);
         row.Children.Add(v);
-        row.Children.Add(new TextBlock { Text = label, FontSize = 12, Foreground = muted ? Brushes.Gray : Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis });
+        row.Children.Add(new TextBlock { Text = label, FontSize = 12, Foreground = muted ? Brushes.Gray : Theme.Res("N.Fg"), TextTrimming = TextTrimming.CharacterEllipsis });
         (target ?? UsageRows).Children.Add(row);
     }
 }

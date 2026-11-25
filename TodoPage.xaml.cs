@@ -28,6 +28,7 @@ public partial class TodoPage : UserControl
         try { _items = JsonSerializer.Deserialize<List<TodoItem>>(File.ReadAllText(FilePath)) ?? new(); }
         catch { _items = new(); }
         Draw();
+        Theme.Changed += Draw;
     }
 
     /// <summary>Lembretes que venceram agora (cada um avisa uma vez só).</summary>
@@ -104,8 +105,8 @@ public partial class TodoPage : UserControl
             var chip = new Border
             {
                 CornerRadius = new CornerRadius(6), Padding = new Thickness(6, 1, 6, 1), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0),
-                Background = new SolidColorBrush(late ? Color.FromRgb(0x4A, 0x1F, 0x1F) : Color.FromRgb(0x23, 0x23, 0x28)),
-                Child = new TextBlock { Text = When(due), FontSize = 10.5, Foreground = late ? new SolidColorBrush(Color.FromRgb(0xFF, 0x8A, 0x80)) : Brushes.LightGray },
+                Background = new SolidColorBrush(late ? Color.FromRgb(0x4A, 0x1F, 0x1F) : ((SolidColorBrush)Theme.Res("N.Field")).Color),
+                Child = new TextBlock { Text = When(due), FontSize = 10.5, Foreground = late ? new SolidColorBrush(Color.FromRgb(0xFF, 0x8A, 0x80)) : Theme.Res("N.Sub") },
             };
             DockPanel.SetDock(chip, Dock.Right);
             row.Children.Add(chip);
@@ -113,7 +114,7 @@ public partial class TodoPage : UserControl
         row.Children.Add(new TextBlock
         {
             Text = item.Title, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
-            Foreground = item.Done ? Brushes.Gray : Brushes.White, TextDecorations = item.Done ? TextDecorations.Strikethrough : null,
+            Foreground = item.Done ? Brushes.Gray : Theme.Res("N.Fg"), TextDecorations = item.Done ? TextDecorations.Strikethrough : null,
         });
         row.MouseEnter += (_, _) => remove.Visibility = Visibility.Visible;
         row.MouseLeave += (_, _) => remove.Visibility = Visibility.Hidden;

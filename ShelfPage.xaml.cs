@@ -26,6 +26,7 @@ public partial class ShelfPage : UserControl
     public ShelfPage()
     {
         InitializeComponent();
+        Theme.Changed += Draw;
     }
 
     /// <summary>Recebe o que foi solto no notch. Devolve true se havia algo que dá para guardar.</summary>
@@ -75,15 +76,15 @@ public partial class ShelfPage : UserControl
     FrameworkElement Tile(Item item)
     {
         string label = item.File != null ? Path.GetFileName(item.File) : item.Text!.Replace('\n', ' ');
-        var thumb = new Border { Width = 54, Height = 44, CornerRadius = new CornerRadius(8), Background = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x26)) };
+        var thumb = new Border { Width = 54, Height = 44, CornerRadius = new CornerRadius(8), Background = Theme.Res("N.Field") };
         if (item.File != null && ImageExt.Contains(Path.GetExtension(item.File)) && Thumb(item.File) is { } img)
             thumb.Background = new ImageBrush(img) { Stretch = Stretch.UniformToFill };
         else if (item.File != null && Shell.FileIcon(item.File) is { } icon)
             thumb.Child = new Image { Source = icon, Width = 28, Height = 28 };
         else
-            thumb.Child = new TextBlock { Text = item.Text?.Length > 40 ? item.Text[..40] : item.Text, FontSize = 8.5, Foreground = Brushes.LightGray, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(5) };
+            thumb.Child = new TextBlock { Text = item.Text?.Length > 40 ? item.Text[..40] : item.Text, FontSize = 8.5, Foreground = Theme.Res("N.Sub"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(5) };
 
-        var remove = new TextBlock { Text = "", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 9, Foreground = Brushes.White, Cursor = Cursors.Hand,
+        var remove = new TextBlock { Text = "", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 9, Foreground = Theme.Res("N.Fg"), Cursor = Cursors.Hand,
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 4, 0), Visibility = Visibility.Hidden };
         remove.MouseLeftButtonDown += (_, e) => { e.Handled = true; _items.Remove(item); Draw(); };
 
@@ -93,7 +94,7 @@ public partial class ShelfPage : UserControl
             Children =
             {
                 thumb,
-                new TextBlock { Text = label, FontSize = 10, Foreground = Brushes.LightGray, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 3, 0, 0), HorizontalAlignment = HorizontalAlignment.Center, MaxWidth = 64 },
+                new TextBlock { Text = label, FontSize = 10, Foreground = Theme.Res("N.Sub"), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 3, 0, 0), HorizontalAlignment = HorizontalAlignment.Center, MaxWidth = 64 },
             },
         });
         tile.Children.Add(remove);

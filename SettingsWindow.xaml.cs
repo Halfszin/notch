@@ -25,6 +25,12 @@ public partial class SettingsWindow : Window
         ShowKeyStatus();
         NotifSwitch.IsChecked = Config.Current.AppNotifications;
         (Config.Current.NotchSize == "compacto" ? SizeSmall : SizeBig).IsChecked = true;
+        (Config.Current.Theme == "claro" ? ThemeLight : ThemeDark).IsChecked = true;
+        AutoHideSwitch.IsChecked = Config.Current.AutoHide;
+        HotkeySwitch.IsChecked = Config.Current.Hotkeys;
+        SoundSwitch.IsChecked = Config.Current.Sounds;
+        ShowHotkeyStatus();
+        Loaded += (_, _) => BuildNav();
         foreach (var (tag, name) in new[] { ("calendar", "Calendário"), ("shelf", "Bandeja"), ("clip", "Área de transferência"), ("notes", "Notas"),
                                             ("system", "Sistema"), ("todo", "Tarefas"), ("shortcuts", "Atalhos"), ("ai", "IA") })
         {
@@ -136,6 +142,128 @@ public partial class SettingsWindow : Window
         KeyInput.Clear();
         SaveConfig(null, KeyStatus);
         ShowKeyStatus();
+    }
+
+    // ---------- barra lateral e busca (como no coucou) ----------
+
+    static readonly Dictionary<string, string> NavIcons = new()
+    {
+        ["NOTCH"] = "\uE7F4", ["APARÊNCIA"] = "\uE790", ["ATALHOS DE TECLADO"] = "\uE765", ["SONS"] = "\uE767", ["AVATAR"] = "\uE77B",
+        ["CLIMA"] = "\uE706", ["INTELIGÊNCIA ARTIFICIAL"] = "\uE99A", ["AGENTES (CLAUDE CODE)"] = "\uE756", ["NOTIFICAÇÕES"] = "\uEA8F",
+        ["ATUALIZAÇÕES"] = "\uE895", ["APP"] = "\uE7E8",
+    };
+
+    // Cada seção = o título (TextBlock com o estilo Label) + o que vem depois até o próximo título.
+    List<(TextBlock Label, List<UIElement> Items, Border Nav)> _sections = new();
+
+    void BuildNav()
+    {
+        var label = (Style)FindResource("Label");
+        _sections.Clear();
+        NavItems.Children.Clear();
+        foreach (UIElement child in Sections.Children)
+        {
+            if (child is TextBlock tb && tb.Style == label)
+            {
+                var nav = NavItem(tb.Text);
+                _sections.Add((tb, new List<UIElement>(), nav));
+                NavItems.Children.Add(nav);
+            }
+            else if (_sections.Count > 0) _sections[^1].Items.Add(child);
+        }
+        if (_sections.Count > 0) Select(_sections[0].Nav);
+    }
+
+    Border NavItem(string section)
+    {
+        string title = System.Globalization.CultureInfo.GetCultureInfo("pt-BR").TextInfo.ToTitleCase(section.ToLowerInvariant()).Replace(" De ", " de ").Replace("(Claude Code)", "");
+        var item = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 7, 12, 7), Margin = new Thickness(0, 0, 0, 2), Background = Brushes.Transparent, Cursor = System.Windows.Input.Cursors.Hand };
+        item.Child = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children =
+            {
+                new TextBlock { Text = NavIcons.GetValueOrDefault(section, "\uE713"), FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Gray },
+                new TextBlock { Text = title.Trim(), FontSize = 13.5, Margin = new Thickness(12, 0, 0, 0) },
+            },
+        };
+        item.MouseLeftButtonUp += (_, _) =>
+        {
+            var target = _sections.First(x => x.Nav == item).Label;
+            ContentScroll.ScrollToVerticalOffset(ContentScroll.VerticalOffset + target.TranslatePoint(new Point(0, 0), ContentScroll).Y - 8);
+            Select(item);
+        };
+        return item;
+    }
+
+    void Select(Border nav)
+    {
+        foreach (var x in _sections) x.Nav.Background = x.Nav == nav ? new SolidColorBrush(Color.FromRgb(0x1C, 0x1C, 0x1F)) : Brushes.Transparent;
+    }
+
+    void Search_TextChanged(object s, TextChangedEventArgs e)
+    {
+        string q = SearchBox.Text.Trim();
+        SearchHint.Visibility = q.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        Banner.Visibility = q.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        var cmp = System.Globalization.CultureInfo.InvariantCulture.CompareInfo;
+        bool Match(string text) => cmp.IndexOf(text, q, System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace) >= 0;
+        foreach (var (label, items, nav) in _sections)
+        {
+            bool show = q.Length == 0 || Match(label.Text) || items.Any(i => Texts(i).Any(Match));
+            var v = show ? Visibility.Visible : Visibility.Collapsed;
+            label.Visibility = nav.Visibility = v;
+            foreach (var i in items) i.Visibility = v;
+        }
+    }
+
+    // Todos os textos visíveis de um pedaço da tela (títulos, explicações, botões).
+    static IEnumerable<string> Texts(object node)
+    {
+        if (node is TextBlock tb) yield return tb.Text;
+        if (node is ContentControl { Content: string s }) yield return s;
+        if (node is DependencyObject d)
+            foreach (var child in LogicalTreeHelper.GetChildren(d))
+                foreach (var t in Texts(child)) yield return t;
+    }
+
+    // ---------- aparência, atalhos, sons ----------
+
+    void Theme_Checked(object s, RoutedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        Config.Current.Theme = (string)((RadioButton)s).Tag;
+        SaveConfig(null, null);
+        Theme.Apply(Config.Current.Theme);
+    }
+
+    void AutoHide_Click(object s, RoutedEventArgs e)
+    {
+        Config.Current.AutoHide = AutoHideSwitch.IsChecked == true;
+        SaveConfig(null, null);
+    }
+
+    void Hotkeys_Click(object s, RoutedEventArgs e)
+    {
+        Config.Current.Hotkeys = HotkeySwitch.IsChecked == true;
+        SaveConfig(null, null);
+        App.OrbiWindow.ApplyHotkeys();
+        ShowHotkeyStatus();
+    }
+
+    void ShowHotkeyStatus() => HotkeyStatus.Text = "Ctrl+Alt+Espaço abre e fecha o notch · Ctrl+Alt+C abre o chat."
+        + (App.OrbiWindow.HotkeyProblem is { } p ? " " + p : "");
+
+    void Sound_Click(object s, RoutedEventArgs e)
+    {
+        Config.Current.Sounds = SoundSwitch.IsChecked == true;
+        SaveConfig(null, null);
+    }
+
+    void OpenSounds_Click(object s, RoutedEventArgs e)
+    {
+        Directory.CreateDirectory(Sounds.Folder);
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Sounds.Folder) { UseShellExecute = true });
     }
 
     void Size_Checked(object s, RoutedEventArgs e)

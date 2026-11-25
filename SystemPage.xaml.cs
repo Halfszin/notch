@@ -38,7 +38,9 @@ public partial class SystemPage : UserControl
         var arc = new Path { StrokeThickness = Thick, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
         var value = new TextBlock { FontSize = 16, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var ring = new Grid { Width = Size, Height = Size };
-        ring.Children.Add(new Ellipse { Stroke = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2E)), StrokeThickness = Thick }); // o Windows desenha o contorno por dentro: centro do traço = raio do arco
+        var track = new Ellipse { StrokeThickness = Thick }; // o Windows desenha o contorno por dentro: centro do traço = raio do arco
+        track.SetResourceReference(Shape.StrokeProperty, "N.Track");
+        ring.Children.Add(track);
         ring.Children.Add(arc);
         ring.Children.Add(value);
         var detail = new TextBlock { FontSize = 10.5, Foreground = Brushes.Gray, HorizontalAlignment = HorizontalAlignment.Center };

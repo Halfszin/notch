@@ -8,6 +8,15 @@ namespace Orbi;
 
 static class Shell
 {
+    /// <summary>Aperta e solta uma combinação de teclas (ex.: Win+Shift+R), como se fosse no teclado.</summary>
+    public static void PressKeys(params byte[] keys)
+    {
+        foreach (var k in keys) keybd_event(k, 0, 0, UIntPtr.Zero);
+        foreach (var k in keys.Reverse()) keybd_event(k, 0, 0x0002, UIntPtr.Zero); // KEYEVENTF_KEYUP
+    }
+
+    [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+
     public static ImageSource? FileIcon(string file)
     {
         // Ícone que o Explorer mostra para o arquivo (ou pasta).

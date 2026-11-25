@@ -28,6 +28,7 @@ public partial class ShortcutsPage : UserControl
         try { _items = JsonSerializer.Deserialize<List<Shortcut>>(File.ReadAllText(FilePath)) ?? new(); }
         catch { _items = new(); }
         Draw();
+        Theme.Changed += Draw;
     }
 
     static bool IsUrl(string target) => target.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || target.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
@@ -35,6 +36,9 @@ public partial class ShortcutsPage : UserControl
     void Draw()
     {
         Items.Children.Clear();
+        // Ferramentas que já vêm prontas: usam a Ferramenta de Captura do próprio Windows.
+        Items.Children.Add(BuiltIn("\uE714", "Gravar tela", "Grava a tela pela Ferramenta de Captura do Windows (Win+Shift+R)", RecordScreen));
+        Items.Children.Add(BuiltIn("\uE722", "Print", "Tira um print de uma parte da tela (Win+Shift+S)", Snip));
         foreach (var s in _items) Items.Children.Add(Tile(s));
         var add = Tile(null);
         Items.Children.Add(add);
@@ -43,14 +47,14 @@ public partial class ShortcutsPage : UserControl
     FrameworkElement Tile(Shortcut? s)
     {
         var mdl2 = new FontFamily("Segoe MDL2 Assets");
-        var icon = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(10), Background = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x26)), HorizontalAlignment = HorizontalAlignment.Center };
+        var icon = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(10), Background = Theme.Res("N.Field"), HorizontalAlignment = HorizontalAlignment.Center };
         if (s == null) icon.Child = new TextBlock { Text = "", FontFamily = mdl2, FontSize = 16, Foreground = Brushes.Gray, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         else if (IsUrl(s.Target)) icon.Child = new TextBlock { Text = "", FontFamily = mdl2, FontSize = 18, Foreground = new SolidColorBrush(Color.FromRgb(0x0A, 0x84, 0xFF)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         else if (Shell.FileIcon(s.Target) is { } img) icon.Child = new Image { Source = img, Width = 26, Height = 26 };
 
         var tile = new StackPanel { Width = 62, Margin = new Thickness(2, 2, 2, 6), Background = Brushes.Transparent, Cursor = Cursors.Hand, ToolTip = s?.Target ?? "Adicionar atalho" };
         tile.Children.Add(icon);
-        tile.Children.Add(new TextBlock { Text = s?.Name ?? "Adicionar", FontSize = 10.5, Foreground = Brushes.LightGray, HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 60, Margin = new Thickness(0, 4, 0, 0) });
+        tile.Children.Add(new TextBlock { Text = s?.Name ?? "Adicionar", FontSize = 10.5, Foreground = Theme.Res("N.Sub"), HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 60, Margin = new Thickness(0, 4, 0, 0) });
         AutomationProperties.SetName(tile, s?.Name ?? "Adicionar atalho");
 
         if (s == null)
@@ -70,6 +74,28 @@ public partial class ShortcutsPage : UserControl
         }
         return tile;
     }
+
+    FrameworkElement BuiltIn(string glyph, string name, string tip, Action run)
+    {
+        var icon = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(10), Background = Theme.Res("N.Field"), HorizontalAlignment = HorizontalAlignment.Center,
+            Child = new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 17, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x45, 0x3A)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+        var tile = new StackPanel { Width = 62, Margin = new Thickness(2, 2, 2, 6), Background = Brushes.Transparent, Cursor = Cursors.Hand, ToolTip = tip };
+        tile.Children.Add(icon);
+        tile.Children.Add(new TextBlock { Text = name, FontSize = 10.5, Foreground = Theme.Res("N.Sub"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) });
+        AutomationProperties.SetName(tile, name);
+        tile.MouseLeftButtonUp += (_, _) => run();
+        return tile;
+    }
+
+    static void Snip()
+    {
+        try { Process.Start(new ProcessStartInfo("ms-screenclip:") { UseShellExecute = true }); }
+        catch { Shell.PressKeys(0x5B, 0x10, 0x53); } // Win+Shift+S
+    }
+
+    // shortcut: usa a gravação da Ferramenta de Captura do Windows 11 (Win+Shift+R); um gravador próprio
+    // exigiria capturar e codificar vídeo dentro do Orbi.
+    static void RecordScreen() => Shell.PressKeys(0x5B, 0x10, 0x52);
 
     static MenuItem Item(string header, Action click)
     {

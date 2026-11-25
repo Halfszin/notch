@@ -14,6 +14,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         Directory.CreateDirectory(Dir);
+        Theme.Apply(Config.Current.Theme);
         // Um erro inesperado vira aviso + linha em erros.log, em vez de fechar o app sem explicação.
         DispatcherUnhandledException += (_, ev) => { ev.Handled = true; Report(ev.Exception); };
         TaskScheduler.UnobservedTaskException += (_, ev) => { ev.SetObserved(); Log(ev.Exception); };

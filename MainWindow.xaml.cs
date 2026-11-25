@@ -105,6 +105,7 @@ public partial class MainWindow : Window
         Deactivated += (_, _) =>
         {
             KeepOnTop();
+        UpdateIdleVisibility();
             AllowKeyboard(false);
             if (!Pill.IsMouseOver) Resize(false);
         };
@@ -126,9 +127,11 @@ public partial class MainWindow : Window
         SetWindowLong(h, -20, GetWindowLong(h, -20) | 0x80 | 0x08000000);
         // Avisos de "algo foi copiado" para o histórico da área de transferência.
         AddClipboardFormatListener(h);
+        ApplyHotkeys();
         HwndSource.FromHwnd(h)!.AddHook((IntPtr hwnd, int msg, IntPtr w, IntPtr l, ref bool handled) =>
         {
             if (msg == 0x031D) ClipView.Capture(); // WM_CLIPBOARDUPDATE
+            if (msg == 0x0312) OnHotkey(w.ToInt32()); // WM_HOTKEY
             return IntPtr.Zero;
         });
     }
@@ -139,6 +142,45 @@ public partial class MainWindow : Window
     {
         var h = new WindowInteropHelper(this).Handle;
         if (h != IntPtr.Zero) SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010); // TOPMOST; NOSIZE|NOMOVE|NOACTIVATE
+    }
+
+    // ---------- atalhos de teclado de qualquer lugar ----------
+
+    public string? HotkeyProblem { get; private set; }
+
+    /// <summary>Ctrl+Alt+Espaço abre/fecha o notch; Ctrl+Alt+C abre o chat.</summary>
+    public void ApplyHotkeys()
+    {
+        var h = new WindowInteropHelper(this).Handle;
+        UnregisterHotKey(h, 1);
+        UnregisterHotKey(h, 2);
+        HotkeyProblem = null;
+        if (!Config.Current.Hotkeys) return;
+        const uint ctrlAlt = 0x0002 | 0x0001 | 0x4000; // CONTROL | ALT | NOREPEAT
+        var failed = new List<string>();
+        if (!RegisterHotKey(h, 1, ctrlAlt, 0x20)) failed.Add("Ctrl+Alt+Espaço");
+        if (!RegisterHotKey(h, 2, ctrlAlt, 0x43)) failed.Add("Ctrl+Alt+C");
+        if (failed.Count > 0) HotkeyProblem = string.Join(" e ", failed) + " já é usado por outro programa.";
+    }
+
+    void OnHotkey(int id)
+    {
+        if (id == 1) { Resize(!_open); return; }
+        if (id != 2) return;
+        if (!_open) Resize(true);
+        TabAi.IsChecked = true;
+        AiView.FocusChat();
+        AllowKeyboard(true);
+    }
+
+    // ---------- esconder quando parado ----------
+
+    void UpdateIdleVisibility()
+    {
+        bool idle = Config.Current.AutoHide && !_open && !_toasting && !_playing && !_dragging
+                    && !Agents.Busy && Agents.Pending.Count == 0 && CalendarView.RunningText == null;
+        // Quase invisível (não zero): assim ainda dá para passar o mouse e abrir.
+        Pill.BeginAnimation(OpacityProperty, new DoubleAnimation(idle ? 0.01 : 1, TimeSpan.FromMilliseconds(250)));
     }
 
     void AllowKeyboard(bool on)
@@ -161,6 +203,7 @@ public partial class MainWindow : Window
         _toastTimer.Stop();
         _toastTimer.Start();
         if (!_open) Resize(false);
+        UpdateIdleVisibility();
     }
 
     void OutputChanged(string deviceId)
@@ -305,6 +348,7 @@ public partial class MainWindow : Window
         if (!open) AllowKeyboard(false);
         Full.IsHitTestVisible = open;
         if (!open && _event == "done") HideEvent();
+        if (open) Pill.BeginAnimation(OpacityProperty, null); // aparece inteiro ao abrir, mesmo se estava escondido
         if (open) { Avatar.Resume(); _look.Start(); }
         else { Avatar.Pause(); _look.Stop(); Avatar.LookAt(null, null); }
     }
@@ -355,7 +399,7 @@ public partial class MainWindow : Window
         };
         Agents.Finished += (project, message) =>
         {
-            SystemSounds.Asterisk.Play();
+            Sounds.Play("terminou", SystemSounds.Asterisk);
             React("celebrate", 4);
             if (Agents.Pending.Count > 0) { Toast("\uE73E", $"{project}: o Claude terminou", Green, 5); return; } // permissão tem prioridade
             ShowEvent("done", project, "Claude Code terminou", null, message.Length > 0 ? message : "Pronto!");
@@ -424,7 +468,7 @@ public partial class MainWindow : Window
         PermAlways.Visibility = perm.Suggestions is System.Text.Json.Nodes.JsonArray { Count: > 0 } ? Visibility.Visible : Visibility.Collapsed;
         PermQueue.Text = Agents.Pending.Count > 1 ? $"+{Agents.Pending.Count - 1} na fila" : "Sem resposta em 2 min, vai para o terminal";
         if (!first) return;
-        SystemSounds.Exclamation.Play();
+        Sounds.Play("permissao", SystemSounds.Exclamation);
         _autoClose.Stop();
         if (!_open) Resize(true);
         React("alerting", 3);
@@ -533,7 +577,7 @@ public partial class MainWindow : Window
 
     void TimerFinished()
     {
-        SystemSounds.Asterisk.Play();
+        Sounds.Play("timer", SystemSounds.Asterisk);
         Resize(true);
         React("celebrate", 6);
         _autoClose.Start();
@@ -552,7 +596,7 @@ public partial class MainWindow : Window
         SystemView.Update(SafeDeviceName());
         foreach (var due in TodoView.TakeDue(now))
         {
-            SystemSounds.Exclamation.Play();
+            Sounds.Play("lembrete", SystemSounds.Exclamation);
             Toast("\uE787", "Lembrete: " + due.Title, new SolidColorBrush(Color.FromRgb(0xFF, 0x9F, 0x0A)), 10);
             React("notifying", 6);
         }
@@ -624,6 +668,13 @@ public partial class MainWindow : Window
             TitleText.Text = string.IsNullOrEmpty(props.Title) ? "Nada tocando" : props.Title;
             ArtistText.Text = props.Artist;
             PlayBtn.Content = _playing ? "" : "";
+            var playback = _session.GetPlaybackInfo();
+            var accent = new SolidColorBrush(Color.FromRgb(0x30, 0xD1, 0x58));
+            if (playback.IsShuffleActive == true) ShuffleBtn.Foreground = accent; else ShuffleBtn.ClearValue(ForegroundProperty);
+            RepeatBtn.Content = playback.AutoRepeatMode == Windows.Media.MediaPlaybackAutoRepeatMode.Track ? "\uE8ED" : "\uE8EE";
+            if (playback.AutoRepeatMode is Windows.Media.MediaPlaybackAutoRepeatMode.List or Windows.Media.MediaPlaybackAutoRepeatMode.Track) RepeatBtn.Foreground = accent;
+            else RepeatBtn.ClearValue(ForegroundProperty);
+            _timeline = (tl.StartTime, tl.EndTime);
 
             var len = tl.EndTime - tl.StartTime;
             var pos = tl.Position + (_playing ? DateTimeOffset.Now - tl.LastUpdatedTime : TimeSpan.Zero);
@@ -644,6 +695,22 @@ public partial class MainWindow : Window
         catch { ShowNothing(); }
     }
 
+    (TimeSpan Start, TimeSpan End) _timeline;
+
+    async void Seek_Click(object s, MouseButtonEventArgs e)
+    {
+        if (_session == null || ProgressTrack.ActualWidth <= 0) return;
+        double ratio = Math.Clamp(e.GetPosition(ProgressTrack).X / ProgressTrack.ActualWidth, 0, 1);
+        var target = _timeline.Start + (_timeline.End - _timeline.Start) * ratio;
+        try
+        {
+            await _session.TryChangePlaybackPositionAsync(target.Ticks);
+            await Task.Delay(250);
+            await UpdateMedia();
+        }
+        catch { }
+    }
+
     static string Fmt(TimeSpan t) => t.ToString(t.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss");
 
     void ShowNothing()
@@ -654,7 +721,7 @@ public partial class MainWindow : Window
         Remaining.Text = "-0:00";
         ProgressFill.Width = 0;
         PlayBtn.Content = "";
-        CoverBox.Background = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x22));
+        CoverBox.SetResourceReference(Border.BackgroundProperty, "N.Field");
         CoverIcon.Visibility = Visibility.Visible;
         SetPlaying(false);
         _coverKey = null;
@@ -662,7 +729,7 @@ public partial class MainWindow : Window
 
     async Task LoadCover(Windows.Storage.Streams.IRandomAccessStreamReference? thumb)
     {
-        CoverBox.Background = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x22));
+        CoverBox.SetResourceReference(Border.BackgroundProperty, "N.Field");
         CoverIcon.Visibility = Visibility.Visible;
         if (thumb == null) return;
         using var ras = await thumb.OpenReadAsync();
@@ -683,10 +750,19 @@ public partial class MainWindow : Window
         if (_session == null) return;
         try
         {
+            var info = _session.GetPlaybackInfo();
             await ((string)((Button)s).Tag switch
             {
                 "prev" => _session.TrySkipPreviousAsync(),
                 "next" => _session.TrySkipNextAsync(),
+                "shuffle" => _session.TryChangeShuffleActiveAsync(!(info.IsShuffleActive ?? false)),
+                // Repetir: desligado → tudo → uma música → desligado
+                "repeat" => _session.TryChangeAutoRepeatModeAsync(info.AutoRepeatMode switch
+                {
+                    Windows.Media.MediaPlaybackAutoRepeatMode.List => Windows.Media.MediaPlaybackAutoRepeatMode.Track,
+                    Windows.Media.MediaPlaybackAutoRepeatMode.Track => Windows.Media.MediaPlaybackAutoRepeatMode.None,
+                    _ => Windows.Media.MediaPlaybackAutoRepeatMode.List,
+                }),
                 _ => _session.TryTogglePlayPauseAsync(),
             });
             await Task.Delay(300);
@@ -904,6 +980,8 @@ public partial class MainWindow : Window
     [DllImport("kernel32.dll")] static extern bool GetSystemPowerStatus(out PowerStatus s);
     [DllImport("user32.dll")] static extern bool GetCursorPos(out CursorPoint p);
     [DllImport("user32.dll")] static extern bool AddClipboardFormatListener(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr hwnd, int id, uint modifiers, uint vk);
+    [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr hwnd, int id);
     [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
     [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr h, int i, int v);

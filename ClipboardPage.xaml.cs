@@ -17,6 +17,7 @@ public partial class ClipboardPage : UserControl
     public ClipboardPage()
     {
         InitializeComponent();
+        Theme.Changed += Draw;
     }
 
     /// <summary>Chamado quando o Windows avisa que a área de transferência mudou.</summary>
@@ -66,7 +67,7 @@ public partial class ClipboardPage : UserControl
 
     FrameworkElement Row(Entry entry)
     {
-        var hover = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x26));
+        var hover = Theme.Res("N.Hover");
         var row = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(8, 5, 8, 5), Margin = new Thickness(0, 0, 4, 3), Background = Brushes.Transparent, Cursor = Cursors.Hand };
         row.Child = entry.Image != null
             ? new StackPanel
@@ -75,10 +76,10 @@ public partial class ClipboardPage : UserControl
                 Children =
                 {
                     new Border { Width = 64, Height = 36, CornerRadius = new CornerRadius(5), Background = new ImageBrush(entry.Image) { Stretch = Stretch.UniformToFill } },
-                    new TextBlock { Text = $"Print {entry.Image.PixelWidth}×{entry.Image.PixelHeight}", FontSize = 12, Foreground = Brushes.LightGray, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center },
+                    new TextBlock { Text = $"Print {entry.Image.PixelWidth}×{entry.Image.PixelHeight}", FontSize = 12, Foreground = Theme.Res("N.Sub"), Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center },
                 },
             }
-            : new TextBlock { Text = entry.Text!.Trim(), FontSize = 12, Foreground = Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 34, TextWrapping = TextWrapping.Wrap };
+            : new TextBlock { Text = entry.Text!.Trim(), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 34, TextWrapping = TextWrapping.Wrap };
         row.MouseEnter += (_, _) => row.Background = hover;
         row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
         row.MouseLeftButtonUp += (_, _) => CopyBack(entry);

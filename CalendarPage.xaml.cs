@@ -25,6 +25,7 @@ public partial class CalendarPage : UserControl
     {
         InitializeComponent();
         _tick.Tick += (_, _) => TickTimer();
+        Theme.Changed += DrawMonth;
         DrawMonth();
     }
 
@@ -57,13 +58,13 @@ public partial class CalendarPage : UserControl
             {
                 CornerRadius = new CornerRadius(5),
                 Margin = new Thickness(1),
-                Background = today ? Brushes.White : Brushes.Transparent,
+                Background = today ? Theme.Res("N.Fg") : Brushes.Transparent,
                 Child = new TextBlock
                 {
                     Text = day.Day.ToString(),
                     FontSize = 10.5,
                     FontWeight = today ? FontWeights.Bold : FontWeights.Normal,
-                    Foreground = today ? Brushes.Black : inMonth ? Brushes.White : new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                    Foreground = today ? Theme.Res("N.Card") : inMonth ? Theme.Res("N.Fg") : Theme.Res("N.Track"),
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                 },

@@ -131,13 +131,18 @@
                     <Image Source="orbi.png" Width="30" Height="30" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
                     <TextBlock Text="Orbi" FontSize="18" FontWeight="Bold" Margin="10,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
-                <TextBlock Text="NOTCH" Style="{StaticResource Label}" Margin="10,0,0,8"/>
-                <Border Background="#1C1C1F" CornerRadius="8" Padding="12,8">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center"/>
-                        <TextBlock Text="Geral" FontSize="14" FontWeight="SemiBold" Margin="12,0,0,0"/>
-                    </StackPanel>
+                <Border Background="#1A1A1D" CornerRadius="8" Padding="10,6" Margin="0,0,0,14">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Left" Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="#8E8E93" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <Grid>
+                            <TextBlock x:Name="SearchHint" Text="Buscar configurações" Foreground="#6E6E73" FontSize="13" IsHitTestVisible="False"/>
+                            <TextBox x:Name="SearchBox" Background="Transparent" Foreground="White" CaretBrush="White" BorderThickness="0" FontSize="13"
+                                     AutomationProperties.Name="Buscar configurações" TextChanged="Search_TextChanged"/>
+                        </Grid>
+                    </DockPanel>
                 </Border>
+                <TextBlock Text="NOTCH" Style="{StaticResource Label}" Margin="10,0,0,8"/>
+                <StackPanel x:Name="NavItems"/>
             </StackPanel>
             <Border DockPanel.Dock="Bottom" Background="#141416" BorderBrush="#232326" BorderThickness="1"
                     CornerRadius="10" Padding="12,9" VerticalAlignment="Bottom">
@@ -150,8 +155,8 @@
 
         <!-- Conteúdo -->
         <Border Grid.Column="1" Margin="0,12,12,12" Background="#111113" BorderBrush="#1E1E21" BorderThickness="1" CornerRadius="18">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel Margin="26,26,26,30">
+            <ScrollViewer x:Name="ContentScroll" VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="Sections" Margin="26,26,26,30">
                     <Border x:Name="Banner" Height="160" CornerRadius="16" BorderBrush="#26262A" BorderThickness="1" ClipToBounds="True">
                         <Border.Background>
                             <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
@@ -210,6 +215,69 @@
                                 <TextBlock Text="Escolha o que aparece no notch. A aba Início fica sempre." Style="{StaticResource RowSub}"/>
                                 <WrapPanel x:Name="TabChips" Margin="0,10,0,0"/>
                             </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="APARÊNCIA" Style="{StaticResource Label}"/>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <Grid Style="{StaticResource Row}">
+                                <StackPanel Margin="0,0,220,0">
+                                    <TextBlock Text="Tema do notch" Style="{StaticResource RowTitle}"/>
+                                    <TextBlock Text="Escuro combina com o notch de verdade; claro fica leve em telas claras." Style="{StaticResource RowSub}"/>
+                                </StackPanel>
+                                <Border HorizontalAlignment="Right" VerticalAlignment="Center" Background="#232326" CornerRadius="8" Padding="3">
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton x:Name="ThemeDark" Content="Escuro" Style="{StaticResource Seg}" GroupName="Theme" Tag="escuro" Checked="Theme_Checked"/>
+                                        <RadioButton x:Name="ThemeLight" Content="Claro" Style="{StaticResource Seg}" GroupName="Theme" Tag="claro" Checked="Theme_Checked"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                            <Border Height="1" Background="#232326" Margin="18,0"/>
+                            <Grid Style="{StaticResource Row}">
+                                <StackPanel Margin="0,0,80,0">
+                                    <TextBlock Text="Esconder quando parado" Style="{StaticResource RowTitle}"/>
+                                    <TextBlock Text="Sem música, agente ou aviso, o notch some. Passe o mouse na borda da tela para ele aparecer." Style="{StaticResource RowSub}"/>
+                                </StackPanel>
+                                <CheckBox x:Name="AutoHideSwitch" Style="{StaticResource Switch}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          AutomationProperties.Name="Esconder quando parado" Click="AutoHide_Click"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="ATALHOS DE TECLADO" Style="{StaticResource Label}"/>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <Grid Style="{StaticResource Row}">
+                                <StackPanel Margin="0,0,80,0">
+                                    <TextBlock Text="Atalhos de qualquer lugar" Style="{StaticResource RowTitle}"/>
+                                    <TextBlock x:Name="HotkeyStatus" Style="{StaticResource RowSub}"/>
+                                </StackPanel>
+                                <CheckBox x:Name="HotkeySwitch" Style="{StaticResource Switch}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          AutomationProperties.Name="Atalhos de teclado" Click="Hotkeys_Click"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="SONS" Style="{StaticResource Label}"/>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <Grid Style="{StaticResource Row}">
+                                <StackPanel Margin="0,0,80,0">
+                                    <TextBlock Text="Sons do Orbi" Style="{StaticResource RowTitle}"/>
+                                    <TextBlock Text="Avisos de permissão, de tarefa terminada, de lembrete e do timer." Style="{StaticResource RowSub}"/>
+                                </StackPanel>
+                                <CheckBox x:Name="SoundSwitch" Style="{StaticResource Switch}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          AutomationProperties.Name="Sons do Orbi" Click="Sound_Click"/>
+                            </Grid>
+                            <Border Height="1" Background="#232326" Margin="18,0"/>
+                            <Grid Style="{StaticResource Row}">
+                                <StackPanel Margin="0,0,200,0">
+                                    <TextBlock Text="Seus próprios sons" Style="{StaticResource RowTitle}"/>
+                                    <TextBlock Text="Coloque na pasta arquivos .wav com estes nomes: permissao, terminou, lembrete, timer, aviso." Style="{StaticResource RowSub}"/>
+                                </StackPanel>
+                                <Button Content="Abrir pasta de sons" Style="{StaticResource PillBtn}" HorizontalAlignment="Right" VerticalAlignment="Center" Click="OpenSounds_Click"/>
+                            </Grid>
                         </StackPanel>
                     </Border>
 
