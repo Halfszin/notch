@@ -1,5 +1,5 @@
 // Interface do notch do Orbi (Rust + Slint, sem HTML).
-import { LineEdit, TextEdit, Switch, Button } from "std-widgets.slint";
+import { LineEdit, TextEdit } from "std-widgets.slint";
 
 export struct TaskRow { title: string, done: bool, due: string }
 export struct DayCell { day: int, in-month: bool, today: bool }
@@ -669,13 +669,110 @@ export component Notch inherits Window {
     }
 }
 
-// Configurações (janela comum do Windows, abre pela engrenagem do notch).
+// Configurações no visual do Orbi em C#: menu à esquerda, cartões com chave à direita.
+component Toggle inherits Rectangle {
+    in-out property <bool> checked;
+    callback toggled();
+    width: 50px;
+    height: 28px;
+    border-radius: 14px;
+    background: root.checked ? #30D158 : #3A3A3E;
+    animate background { duration: 150ms; }
+    Rectangle {
+        width: 22px;
+        height: 22px;
+        border-radius: 11px;
+        background: white;
+        x: root.checked ? root.width - self.width - 3px : 3px;
+        animate x { duration: 150ms; easing: ease-out; }
+    }
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.checked = !root.checked; root.toggled(); }
+    }
+}
+
+component PillButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary;
+    callback clicked();
+    height: 30px;
+    min-width: label.preferred-width + 28px;
+    border-radius: 8px;
+    background: root.primary ? (ta.has-hover ? #E5E5EA : white) : (ta.has-hover ? #38383C : #2A2A2E);
+    label := Text { text: root.text; color: root.primary ? black : white; font-size: 13px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+component SectionLabel inherits Text {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6E6E73;
+}
+
+component Card inherits Rectangle {
+    background: #161618;
+    border-color: #232326;
+    border-width: 1px;
+    border-radius: 14px;
+    VerticalLayout { @children }
+}
+
+component Divider inherits Rectangle {
+    height: 1px;
+    Rectangle { x: 18px; width: parent.width - 36px; height: 1px; background: #232326; }
+}
+
+// Linha do cartão: título + explicação à esquerda, controle (chave ou botões) à direita.
+component Row inherits HorizontalLayout {
+    in property <string> title;
+    in property <string> sub;
+    padding-left: 18px;
+    padding-right: 18px;
+    padding-top: 14px;
+    padding-bottom: 14px;
+    spacing: 16px;
+    VerticalLayout {
+        alignment: center;
+        horizontal-stretch: 1;
+        Text { text: root.title; color: white; font-size: 14px; font-weight: 600; }
+        if root.sub != "" : Text { text: root.sub; color: #8E8E93; font-size: 12px; wrap: word-wrap; }
+    }
+    HorizontalLayout { alignment: end; spacing: 8px; @children }
+}
+
+component SwitchRow inherits Row {
+    in-out property <bool> checked;
+    callback toggled();
+    VerticalLayout { alignment: center; Toggle { checked <=> root.checked; toggled => { root.toggled(); } } }
+}
+
+component NavItem inherits Rectangle {
+    in property <string> glyph;
+    in property <string> text;
+    in property <bool> selected;
+    callback clicked();
+    height: 34px;
+    border-radius: 8px;
+    background: root.selected ? #1C1C1F : ta.has-hover ? #151517 : transparent;
+    HorizontalLayout {
+        padding-left: 12px;
+        spacing: 12px;
+        Text { text: root.glyph; font-family: "Segoe MDL2 Assets"; font-size: 13px; color: #8E8E93; vertical-alignment: center; }
+        Text { text: root.text; font-size: 13.5px; color: white; vertical-alignment: center; }
+    }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
 export component Settings inherits Window {
-    title: "Configurações do Orbi";
+    title: "Orbi";
     icon: @image-url("../../orbi.png");
-    preferred-width: 420px;
-    preferred-height: 560px;
-    background: #1C1C1E;
+    preferred-width: 900px;
+    preferred-height: 600px;
+    min-width: 760px;
+    min-height: 480px;
+    background: #0B0B0C;
+    default-font-family: "Segoe UI";
     in-out property <bool> start-with-windows;
     in-out property <bool> battery-alerts: true;
     in-out property <bool> audio-alerts: true;
@@ -690,32 +787,187 @@ export component Settings inherits Window {
     callback check-update();
     callback restart-update();
     callback open-folder();
+    callback quit();
 
-    VerticalLayout {
-        padding: 24px;
-        spacing: 14px;
-        Text { text: "Configurações"; font-size: 22px; font-weight: 700; color: white; }
-        Text { text: "Geral"; font-size: 13px; font-weight: 600; color: #30D158; }
-        Switch { text: "Iniciar com o Windows"; checked <=> root.start-with-windows; toggled => { root.changed(); } }
-        Switch { text: "Letras das músicas"; checked <=> root.lyrics; toggled => { root.changed(); } }
-        Switch { text: "Gradiente com a cor da capa"; checked <=> root.gradient; toggled => { root.changed(); } }
-        Text { text: "Avisos"; font-size: 13px; font-weight: 600; color: #30D158; }
-        Switch { text: "Bateria e carregador"; checked <=> root.battery-alerts; toggled => { root.changed(); } }
-        Switch { text: "Troca da saída de som (fone)"; checked <=> root.audio-alerts; toggled => { root.changed(); } }
-        Switch { text: "Lembretes das tarefas"; checked <=> root.reminders; toggled => { root.changed(); } }
-        Text { text: "Atualização"; font-size: 13px; font-weight: 600; color: #30D158; }
-        Switch { text: "Atualizar sozinho"; checked <=> root.auto-update; toggled => { root.changed(); } }
-        Text { text: root.update-status; color: #AEAEB2; font-size: 12px; wrap: word-wrap; }
-        HorizontalLayout {
-            spacing: 8px;
-            Button { text: "Procurar agora"; clicked => { root.check-update(); } }
-            Button { text: "Reiniciar e atualizar"; primary: true; enabled: root.update-ready; clicked => { root.restart-update(); } }
+    property <int> section: 0;
+    property <[{glyph: string, text: string}]> nav: [
+        { glyph: "\u{E7F4}", text: "Notch" },
+        { glyph: "\u{E790}", text: "Aparência" },
+        { glyph: "\u{EA8F}", text: "Notificações" },
+        { glyph: "\u{E895}", text: "Atualizações" },
+        { glyph: "\u{E7E8}", text: "App" },
+    ];
+    // Clicar no menu rola até a seção (como no Orbi em C#).
+    function go(i: int) {
+        root.section = i;
+        let y = i == 0 ? s0.y : i == 1 ? s1.y : i == 2 ? s2.y : i == 3 ? s3.y : s4.y;
+        flick.content-y = max(-(y - 8px), flick.height - flick.content-height);
+    }
+
+    HorizontalLayout {
+        // ---- menu ----
+        VerticalLayout {
+            width: 230px;
+            padding: 18px;
+            padding-top: 22px;
+            spacing: 2px;
+            HorizontalLayout {
+                spacing: 10px;
+                height: 34px;
+                Image { source: @image-url("../../orbi.png"); width: 28px; height: 28px; y: 3px; }
+                Text { text: "Orbi"; font-size: 18px; font-weight: 700; color: white; vertical-alignment: center; }
+            }
+            Rectangle { height: 18px; }
+            HorizontalLayout { padding-left: 10px; height: 22px; SectionLabel { text: "CONFIGURAÇÕES"; } }
+            for item[i] in root.nav : NavItem {
+                glyph: item.glyph;
+                text: item.text;
+                selected: root.section == i;
+                clicked => { root.go(i); }
+            }
+            Rectangle { vertical-stretch: 1; }
+            Rectangle {
+                height: 36px;
+                background: #141416;
+                border-color: #232326;
+                border-width: 1px;
+                border-radius: 10px;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    spacing: 8px;
+                    Rectangle { width: 7px; height: 7px; border-radius: 3.5px; background: #30D158; y: (parent.height - 7px) / 2; }
+                    Text { text: "Ativo · mouse no notch"; font-size: 12px; color: #AEAEB2; vertical-alignment: center; }
+                }
+            }
         }
-        Rectangle { vertical-stretch: 1; }
-        HorizontalLayout {
-            Text { text: "Orbi " + root.version; color: #8E8E93; font-size: 12px; vertical-alignment: center; }
-            Rectangle { horizontal-stretch: 1; }
-            Button { text: "Abrir pasta dos dados"; clicked => { root.open-folder(); } }
+
+        // ---- conteúdo ----
+        VerticalLayout {
+            padding-top: 12px;
+            padding-right: 12px;
+            padding-bottom: 12px;
+            Rectangle {
+                background: #111113;
+                border-color: #1E1E21;
+                border-width: 1px;
+                border-radius: 18px;
+                clip: true;
+                flick := Flickable {
+                    content-height: content.preferred-height;
+                    content := VerticalLayout {
+                        width: flick.width;
+                        padding: 26px;
+                        padding-bottom: 30px;
+                        spacing: 0px;
+                        Rectangle {
+                            height: 160px;
+                            border-radius: 16px;
+                            border-color: #26262A;
+                            border-width: 1px;
+                            clip: true;
+                            background: @linear-gradient(135deg, #050506 0%, #0B0B0D 55%, #2C2C30 100%);
+                            for st in [{x: 0.12, y: 0.70, s: 2px}, {x: 0.30, y: 0.25, s: 1.5px}, {x: 0.46, y: 0.62, s: 2px}, {x: 0.58, y: 0.18, s: 1.5px}, {x: 0.70, y: 0.48, s: 2.5px}, {x: 0.86, y: 0.22, s: 1.5px}, {x: 0.22, y: 0.40, s: 1px}] : Rectangle {
+                                x: parent.width * st.x;
+                                y: parent.height * st.y;
+                                width: st.s;
+                                height: st.s;
+                                border-radius: st.s / 2;
+                                background: #FFFFFF66;
+                            }
+                            Text { x: 26px; y: 34px; text: "Configurações"; font-size: 30px; font-weight: 700; color: white; }
+                            Avatar { width: 96px; height: 96px; x: parent.width - self.width - 24px; y: parent.height - self.height - 6px; }
+                        }
+
+                        s0 := SectionLabel { text: "NOTCH"; height: 46px; vertical-alignment: bottom; }
+                        Rectangle { height: 10px; }
+                        Card {
+                            SwitchRow {
+                                title: "Iniciar com o Windows";
+                                sub: "O notch aparece sozinho quando você liga o PC, sem abrir esta tela.";
+                                checked <=> root.start-with-windows;
+                                toggled => { root.changed(); }
+                            }
+                        }
+
+                        s1 := SectionLabel { text: "APARÊNCIA"; height: 46px; vertical-alignment: bottom; }
+                        Rectangle { height: 10px; }
+                        Card {
+                            SwitchRow {
+                                title: "Gradiente com a cor da capa";
+                                sub: "Na página da música, o fundo do notch pega a cor do álbum.";
+                                checked <=> root.gradient;
+                                toggled => { root.changed(); }
+                            }
+                            Divider { }
+                            SwitchRow {
+                                title: "Letras das músicas";
+                                sub: "Mostra a letra sincronizada ao lado do player, quando a música tem.";
+                                checked <=> root.lyrics;
+                                toggled => { root.changed(); }
+                            }
+                        }
+
+                        s2 := SectionLabel { text: "NOTIFICAÇÕES"; height: 46px; vertical-alignment: bottom; }
+                        Rectangle { height: 10px; }
+                        Card {
+                            SwitchRow {
+                                title: "Bateria e carregador";
+                                sub: "Avisa ao ligar ou tirar da tomada e quando a bateria fica fraca.";
+                                checked <=> root.battery-alerts;
+                                toggled => { root.changed(); }
+                            }
+                            Divider { }
+                            SwitchRow {
+                                title: "Saída de som";
+                                sub: "Avisa quando o som muda para o fone ou para as caixas.";
+                                checked <=> root.audio-alerts;
+                                toggled => { root.changed(); }
+                            }
+                            Divider { }
+                            SwitchRow {
+                                title: "Lembretes das tarefas";
+                                sub: "Tarefas com hora (ex.: \"ligar pro banco às 15h\") avisam no notch.";
+                                checked <=> root.reminders;
+                                toggled => { root.changed(); }
+                            }
+                        }
+
+                        s3 := SectionLabel { text: "ATUALIZAÇÕES"; height: 46px; vertical-alignment: bottom; }
+                        Rectangle { height: 10px; }
+                        Card {
+                            SwitchRow {
+                                title: "Atualizar sozinho";
+                                sub: "Procura versão nova ao abrir e a cada 4 horas e baixa sozinho.";
+                                checked <=> root.auto-update;
+                                toggled => { root.changed(); }
+                            }
+                            Divider { }
+                            Row {
+                                title: "Orbi " + root.version;
+                                sub: root.update-status;
+                                VerticalLayout { alignment: center; PillButton { text: "Verificar agora"; clicked => { root.check-update(); } } }
+                                if root.update-ready : VerticalLayout { alignment: center; PillButton { text: "Reiniciar e atualizar"; primary: true; clicked => { root.restart-update(); } } }
+                            }
+                        }
+
+                        s4 := SectionLabel { text: "APP"; height: 46px; vertical-alignment: bottom; }
+                        Rectangle { height: 10px; }
+                        Card {
+                            Row {
+                                title: "Pasta dos dados";
+                                sub: "Tarefas, notas e atalhos (atalhos.json) ficam aqui, os mesmos do Orbi em C#.";
+                                VerticalLayout { alignment: center; PillButton { text: "Abrir pasta"; clicked => { root.open-folder(); } } }
+                            }
+                            Divider { }
+                            Row {
+                                title: "Fechar o Orbi";
+                                sub: "O notch some até você abrir o app de novo. Fechar esta janela não fecha o notch.";
+                                VerticalLayout { alignment: center; PillButton { text: "Sair"; clicked => { root.quit(); } } }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

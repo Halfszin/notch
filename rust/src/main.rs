@@ -37,6 +37,8 @@ fn main() {
 }
 
 fn run() -> Result<(), slint::PlatformError> {
+    #[cfg(windows)]
+    if !settings::claim_instance() { return Ok(()); }
     let notch = Notch::new()?;
     #[cfg(windows)]
     {

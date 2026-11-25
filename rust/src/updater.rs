@@ -44,7 +44,7 @@ pub fn check_now() {
 
 /// Abre a versão nova e fecha esta.
 pub fn restart() {
-    if std::process::Command::new(exe()).spawn().is_ok() {
+    if std::process::Command::new(exe()).arg("--after-update").spawn().is_ok() {
         let _ = slint::quit_event_loop();
     }
 }

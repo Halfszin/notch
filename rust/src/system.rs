@@ -6,7 +6,7 @@ use windows::Win32::Foundation::{HWND, POINT};
 use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetCursorPos, GetSystemMetrics, GetWindowLongPtrW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, GWL_EXSTYLE, HWND_TOPMOST,
-    SM_CXSCREEN, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    SM_CXSCREEN, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, ShowWindow, SW_HIDE, SW_SHOWNOACTIVATE, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
 };
 
 use crate::Notch;
@@ -21,6 +21,9 @@ pub fn setup(notch: &Notch) {
                 unsafe {
                     let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
                     SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | WS_EX_TOOLWINDOW.0 as isize | WS_EX_NOACTIVATE.0 as isize);
+                    // O Windows só tira da barra de tarefas quando a janela reaparece com o estilo novo.
+                    let _ = ShowWindow(hwnd, SW_HIDE);
+                    let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
                 }
             }
             let screen_w = unsafe { GetSystemMetrics(SM_CXSCREEN) };
@@ -31,6 +34,8 @@ pub fn setup(notch: &Notch) {
     .ok();
 
     notch.on_quit(|| { let _ = slint::quit_event_loop(); });
+    // Fechar pela barra de tarefas/Alt+F4 não derruba o notch; sair é pelo X do notch ou nas configurações.
+    notch.window().on_close_requested(|| slint::CloseRequestResponse::KeepWindowShown);
 
     // Diagnóstico (rust-diag.txt): escala, tela e onde a janela ficou — para entender PCs onde o notch não abre.
     let weak = notch.as_weak();

@@ -5,6 +5,8 @@ use slint::{ComponentHandle, Weak};
 use std::cell::RefCell;
 use std::sync::atomic::Ordering;
 use windows::core::{w, PCWSTR};
+use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS, HANDLE};
+use windows::Win32::System::Threading::{CreateEventW, SetEvent, WaitForSingleObject, INFINITE};
 use windows::Win32::System::Registry::{RegDeleteKeyValueW, RegGetValueW, RegSetKeyValueW, HKEY_CURRENT_USER, REG_SZ, RRF_RT_REG_SZ};
 
 use crate::{updater, Notch, Settings};
@@ -47,6 +49,10 @@ pub fn setup(notch: &Notch) {
     NOTCH.with(|n| *n.borrow_mut() = Some(notch.as_weak()));
     notch.on_open_settings(show);
     updater::start();
+    // Como no Orbi em C#: abrir pelo ícone mostra as configurações; ao ligar o PC (--startup), só o notch.
+    if !std::env::args().any(|a| a == "--startup") {
+        let _ = slint::invoke_from_event_loop(show);
+    }
 }
 
 /// O atualizador conta o que está fazendo; quando a versão nova fica pronta, o notch avisa.
@@ -65,7 +71,29 @@ pub fn on_update(text: String, ready: bool) {
     }
 }
 
-fn show() {
+/// Uma cópia só, como no Orbi em C#: abrir o app de novo só mostra as configurações da que já está aberta.
+/// Devolve false quando outra cópia já está rodando (e já foi avisada).
+pub fn claim_instance() -> bool {
+    let after_update = std::env::args().any(|a| a == "--after-update");
+    // Depois de atualizar, a cópia velha ainda está fechando: espera ela soltar o nome (até 10 s).
+    for _ in 0..if after_update { 100 } else { 1 } {
+        let Ok(h) = (unsafe { CreateEventW(None, false, false, w!("Local\\OrbiRust.ShowSettings")) }) else { return true };
+        if unsafe { GetLastError() } != ERROR_ALREADY_EXISTS {
+            let raw = h.0 as isize; // HANDLE não é Send; o número é
+            std::thread::spawn(move || loop {
+                unsafe { WaitForSingleObject(HANDLE(raw as *mut _), INFINITE) };
+                let _ = slint::invoke_from_event_loop(show);
+            });
+            return true;
+        }
+        if !after_update { unsafe { let _ = SetEvent(h); } }
+        unsafe { let _ = windows::Win32::Foundation::CloseHandle(h); }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    false
+}
+
+pub fn show() {
     WINDOW.with(|cell| {
         let mut cell = cell.borrow_mut();
         if cell.is_none() {
@@ -95,6 +123,7 @@ fn show() {
             });
             w.on_check_update(updater::check_now);
             w.on_restart_update(updater::restart);
+            w.on_quit(|| { let _ = slint::quit_event_loop(); });
             w.on_open_folder(|| {
                 let _ = std::fs::create_dir_all(crate::store::dir());
                 crate::winapi::open(&crate::store::dir().to_string_lossy());
@@ -132,7 +161,7 @@ fn autostart() -> bool {
 fn set_autostart(on: bool) {
     unsafe {
         if on {
-            let cmd: Vec<u16> = format!("\"{}\"", updater::exe().display()).encode_utf16().chain(Some(0)).collect();
+            let cmd: Vec<u16> = format!("\"{}\" --startup", updater::exe().display()).encode_utf16().chain(Some(0)).collect();
             let _ = RegSetKeyValueW(HKEY_CURRENT_USER, RUN, VALUE, REG_SZ.0, Some(cmd.as_ptr().cast()), (cmd.len() * 2) as u32);
         } else {
             let _ = RegDeleteKeyValueW(HKEY_CURRENT_USER, RUN, VALUE);

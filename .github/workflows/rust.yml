@@ -48,7 +48,8 @@ jobs:
           '[{"Name":"Bloco de notas","Target":"C:\\Windows\\System32\\notepad.exe"},{"Name":"github.com","Target":"https://github.com/"},{"Name":"Windows","Target":"C:\\Windows"}]' | Set-Content "$env:APPDATA\Orbi\atalhos.json" -Encoding utf8
           Add-Type -Namespace W -Name M -MemberDefinition '[DllImport("user32.dll")] public static extern void mouse_event(uint f, int x, int y, int d, System.UIntPtr e);'
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 900, 700
-          $p = Start-Process $exe -PassThru
+          # --startup: abre como ao ligar o PC (só o notch, sem a tela de configurações).
+          $p = Start-Process $exe -ArgumentList "--startup" -PassThru
           Start-Sleep 6
           Shot "1-fechado"
           $w = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width
@@ -100,6 +101,11 @@ jobs:
           # Atualizador: 20 s depois de abrir compara com o versao.txt da prévia (outro commit) e troca o .exe.
           for ($i = 0; $i -lt 40 -and -not (Test-Path run\orbi.exe.old); $i++) { Start-Sleep 2 }
           "atualizou=$(Test-Path run\orbi.exe.old)" | Out-File ci\resultado.txt -Append
+          # Abrir o app de novo não cria outro notch: só mostra as configurações do que já está aberto.
+          $p2 = Start-Process target\release\orbi.exe -PassThru
+          Start-Sleep 3
+          "segunda_copia_fechou=$($p2.HasExited)" | Out-File ci\resultado.txt -Append
+          Shot "15-segunda-copia"
           Shot "14-atualizado"
           if (Test-Path "$env:APPDATA\Orbi\rust-erro.log") { Copy-Item "$env:APPDATA\Orbi\rust-erro.log" ci\erro.log }
           if (Test-Path "$env:APPDATA\Orbi\rust-diag.txt") { Copy-Item "$env:APPDATA\Orbi\rust-diag.txt" ci\diag.txt }
