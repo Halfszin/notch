@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write
 
+# Um teste por vez: um push no meio espera o anterior publicar a prévia, sem um sobrescrever o outro fora de ordem.
+concurrency:
+  group: rust-preview
+  cancel-in-progress: false
+
 jobs:
   windows:
     runs-on: windows-latest
