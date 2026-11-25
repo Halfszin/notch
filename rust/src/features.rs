@@ -51,7 +51,7 @@ fn battery_and_audio(notch: &Notch) {
         let charging = n.get_charging();
         let mut was = was_charging.borrow_mut();
         if let Some(w) = *was {
-            if w != charging {
+            if w != charging && crate::settings::get().battery_alerts {
                 if charging { toast(&n, "\u{E945}", &format!("Carregando · {pct}%"), GREEN, 4); }
                 else { toast(&n, "\u{E83F}", &format!("Na bateria · {pct}%"), if pct <= 20 { RED } else { GREEN }, 4); }
             }
@@ -60,7 +60,7 @@ fn battery_and_audio(notch: &Notch) {
         // Bateria fraca: avisa em 20% e de novo em 10% (rearma quando carregar).
         let mut at = warn_at.borrow_mut();
         if charging { *at = 20; } else if pct <= *at {
-            toast(&n, "\u{E83F}", &format!("Bateria fraca · {pct}%"), RED, 6);
+            if crate::settings::get().battery_alerts { toast(&n, "\u{E83F}", &format!("Bateria fraca · {pct}%"), RED, 6); }
             *at = if pct <= 10 { 0 } else { 10 };
         }
     });
@@ -80,7 +80,7 @@ fn battery_and_audio(notch: &Notch) {
                     let Some(n) = weak.upgrade() else { return };
                     let label = name.unwrap_or_else(|| "Sem saída de som".into());
                     n.set_audio_device(label.clone().into());
-                    if changed { toast(&n, "\u{E7F6}", &label, WHITE, 4); }
+                    if changed && crate::settings::get().audio_alerts { toast(&n, "\u{E7F6}", &label, WHITE, 4); }
                 });
             }
             std::thread::sleep(Duration::from_secs(2));

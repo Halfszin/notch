@@ -22,6 +22,8 @@ jobs:
         run: cargo test --release
 
       - name: Compilar
+        env:
+          ORBI_BUILD: ${{ github.sha }}  # o atualizador compara com o versao.txt da prévia
         run: cargo build --release
 
       - name: Abrir o Orbi (Rust) e tirar prints
@@ -65,11 +67,32 @@ jobs:
           Shot "5-depois-do-clique"
           # Páginas novas (leva 1): Foco → Calendário → Notas → Copiados → Sistema → Atalhos.
           Set-Clipboard -Value "Texto copiado no teste do CI"
-          foreach ($name in "6-foco", "7-calendario", "8-notas", "9-copiados", "10-sistema", "11-atalhos") {
+          foreach ($name in "6-foco", "7-calendario", "8-notas", "9-copiados") {
             [W.M]::mouse_event(0x0800, 0, 0, -120, [System.UIntPtr]::Zero)
             Start-Sleep 1
             Shot $name
           }
+          # Diagnóstico: depois de Copiados a rodinha parou no teste anterior. Uma rodada de rodinha
+          # parado no topo, depois clique na seta da direita, depois rodinha de novo.
+          [W.M]::mouse_event(0x0800, 0, 0, -120, [System.UIntPtr]::Zero)
+          Start-Sleep 1
+          Shot "10-roda-em-copiados"
+          function Click($x, $y) {
+            [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]$x), ([int]$y)
+            Start-Sleep -Milliseconds 400
+            [W.M]::mouse_event(0x0002, 0, 0, 0, [System.UIntPtr]::Zero)
+            [W.M]::mouse_event(0x0004, 0, 0, 0, [System.UIntPtr]::Zero)
+            Start-Sleep 1
+          }
+          Click (($w + 620) / 2 - 22) 131
+          Shot "11-seta-direita"
+          [W.M]::mouse_event(0x0800, 0, 0, -120, [System.UIntPtr]::Zero)
+          Start-Sleep 1
+          Shot "12-roda-de-novo"
+          # Engrenagem (ao lado do X) abre as configurações.
+          Click (($w + 620) / 2 - 88) 22
+          Start-Sleep 1
+          Shot "13-configuracoes"
           "vivo=$(-not $p.HasExited)" | Out-File ci\resultado.txt -Append
           if (Test-Path "$env:APPDATA\Orbi\rust-erro.log") { Copy-Item "$env:APPDATA\Orbi\rust-erro.log" ci\erro.log }
           if (Test-Path "$env:APPDATA\Orbi\rust-diag.txt") { Copy-Item "$env:APPDATA\Orbi\rust-diag.txt" ci\diag.txt }
@@ -93,11 +116,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp target/release/orbi.exe Orbi-rust.exe
+          echo "$GITHUB_SHA" > versao.txt
           # A etiqueta aponta para o main: o GitHub recusa (às vezes como erro 500) criar etiqueta num commit
           # cujos arquivos de workflow diferem dos do main, o que acontece quando chega um push novo no meio.
           for i in 1 2 3; do
-            gh release upload rust-preview Orbi-rust.exe --clobber && exit 0
-            gh release create rust-preview Orbi-rust.exe --target main --prerelease --title "Orbi em Rust (preview)" \
+            # O .exe sobe antes do versao.txt: quem vê a versão nova já encontra o .exe novo.
+            gh release upload rust-preview Orbi-rust.exe --clobber && gh release upload rust-preview versao.txt --clobber && exit 0
+            gh release create rust-preview Orbi-rust.exe versao.txt --target main --prerelease --title "Orbi em Rust (preview)" \
               --notes "Preview da versao em Rust. Nao substitui o Orbi atual: baixe e abra o Orbi-rust.exe para testar." && exit 0
             sleep $((i * 10))
           done

@@ -81,7 +81,7 @@ pub fn start(notch: &Notch) {
                         n.set_progress(0.0);
                     }
                 }
-                n.set_has_lyrics(lines.is_some());
+                n.set_has_lyrics(lines.is_some() && crate::settings::get().lyrics);
                 if let Some([prev, now, next, next2]) = lines {
                     n.set_lyric_prev(prev.into());
                     n.set_lyric_now(if now.is_empty() { "♪".into() } else { now.into() });

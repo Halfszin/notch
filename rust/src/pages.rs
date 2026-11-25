@@ -78,7 +78,7 @@ pub fn setup(notch: &Notch) {
                 }
                 if !fired.is_empty() { store::save(TASKS, &*t); }
             }
-            if let (Some(n), Some(title)) = (weak.upgrade(), fired.first()) {
+            if let (Some(n), Some(title), true) = (weak.upgrade(), fired.first(), crate::settings::get().reminders) {
                 crate::features::toast(&n, "\u{E787}", &format!("Lembrete: {title}"), slint::Color::from_rgb_u8(0xFF, 0x9F, 0x0A), 10);
                 show();
             }

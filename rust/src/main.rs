@@ -16,6 +16,10 @@ mod system;
 mod winapi;
 #[cfg(windows)]
 mod features;
+#[cfg(windows)]
+mod settings;
+#[cfg(windows)]
+mod updater;
 
 /// Erros vão para %AppData%\Orbi\rust-erro.log (o app não tem console para mostrar).
 fn log_error(msg: &str) {
@@ -40,6 +44,7 @@ fn run() -> Result<(), slint::PlatformError> {
         media::start(&notch);
         pages::setup(&notch);
         features::setup(&notch);
+        settings::setup(&notch);
     }
     notch.run()
 }

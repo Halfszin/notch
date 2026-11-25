@@ -1,5 +1,5 @@
 // Interface do notch do Orbi (Rust + Slint, sem HTML).
-import { LineEdit, TextEdit } from "std-widgets.slint";
+import { LineEdit, TextEdit, Switch, Button } from "std-widgets.slint";
 
 export struct TaskRow { title: string, done: bool, due: string }
 export struct DayCell { day: int, in-month: bool, today: bool }
@@ -171,6 +171,8 @@ export component Notch inherits Window {
     in property <bool> hovered;
     out property <bool> open: root.hovered || ta.has-hover || root.adding || root.notes-focused;
     callback quit();
+    callback open-settings();
+    in property <bool> gradient-enabled: true;
     in property <string> clock: "00:00";
     in property <string> closed-text: root.clock;
     in property <string> date-text;
@@ -263,7 +265,7 @@ export component Notch inherits Window {
 
 
     property <color> ring-color: !root.has-battery ? #8E8E93 : (root.battery <= 0.2 && !root.charging ? #FF453A : #30D158);
-    property <bool> music-glow: root.page == 0 && root.has-cover;
+    property <bool> music-glow: root.page == 0 && root.has-cover && root.gradient-enabled;
 
     pill := Rectangle {
         width: root.open ? root.open-width : root.toasting ? root.toast-width : root.closed-width;
@@ -343,6 +345,7 @@ export component Notch inherits Window {
                     alignment: end;
                     spacing: 6px;
                     AudioBars { playing: root.playing; }
+                    IconButton { glyph: "\u{E713}"; size: 10px; tint: #8E8E93; width: 24px; height: 24px; clicked => { root.open-settings(); } }
                     IconButton { glyph: "\u{E711}"; size: 10px; tint: #8E8E93; width: 24px; height: 24px; clicked => { root.quit(); } }
                 }
             }
@@ -662,6 +665,57 @@ export component Notch inherits Window {
             x: parent.width - 36px; y: parent.height / 2 - 14px; width: 28px; height: 28px; border-radius: 14px; background: #FFFFFF18;
             Text { text: "\u{E76C}"; font-family: "Segoe MDL2 Assets"; font-size: 11px; color: white; horizontal-alignment: center; vertical-alignment: center; }
             TouchArea { clicked => { root.page += 1; } mouse-cursor: pointer; }
+        }
+    }
+}
+
+// Configurações (janela comum do Windows, abre pela engrenagem do notch).
+export component Settings inherits Window {
+    title: "Configurações do Orbi";
+    icon: @image-url("../../orbi.png");
+    preferred-width: 420px;
+    preferred-height: 560px;
+    background: #1C1C1E;
+    in-out property <bool> start-with-windows;
+    in-out property <bool> battery-alerts: true;
+    in-out property <bool> audio-alerts: true;
+    in-out property <bool> reminders: true;
+    in-out property <bool> lyrics: true;
+    in-out property <bool> gradient: true;
+    in-out property <bool> auto-update: true;
+    in property <string> version;
+    in property <string> update-status;
+    in property <bool> update-ready;
+    callback changed();
+    callback check-update();
+    callback restart-update();
+    callback open-folder();
+
+    VerticalLayout {
+        padding: 24px;
+        spacing: 14px;
+        Text { text: "Configurações"; font-size: 22px; font-weight: 700; color: white; }
+        Text { text: "Geral"; font-size: 13px; font-weight: 600; color: #30D158; }
+        Switch { text: "Iniciar com o Windows"; checked <=> root.start-with-windows; toggled => { root.changed(); } }
+        Switch { text: "Letras das músicas"; checked <=> root.lyrics; toggled => { root.changed(); } }
+        Switch { text: "Gradiente com a cor da capa"; checked <=> root.gradient; toggled => { root.changed(); } }
+        Text { text: "Avisos"; font-size: 13px; font-weight: 600; color: #30D158; }
+        Switch { text: "Bateria e carregador"; checked <=> root.battery-alerts; toggled => { root.changed(); } }
+        Switch { text: "Troca da saída de som (fone)"; checked <=> root.audio-alerts; toggled => { root.changed(); } }
+        Switch { text: "Lembretes das tarefas"; checked <=> root.reminders; toggled => { root.changed(); } }
+        Text { text: "Atualização"; font-size: 13px; font-weight: 600; color: #30D158; }
+        Switch { text: "Atualizar sozinho"; checked <=> root.auto-update; toggled => { root.changed(); } }
+        Text { text: root.update-status; color: #AEAEB2; font-size: 12px; wrap: word-wrap; }
+        HorizontalLayout {
+            spacing: 8px;
+            Button { text: "Procurar agora"; clicked => { root.check-update(); } }
+            Button { text: "Reiniciar e atualizar"; primary: true; enabled: root.update-ready; clicked => { root.restart-update(); } }
+        }
+        Rectangle { vertical-stretch: 1; }
+        HorizontalLayout {
+            Text { text: "Orbi " + root.version; color: #8E8E93; font-size: 12px; vertical-alignment: center; }
+            Rectangle { horizontal-stretch: 1; }
+            Button { text: "Abrir pasta dos dados"; clicked => { root.open-folder(); } }
         }
     }
 }
