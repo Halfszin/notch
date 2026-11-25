@@ -117,6 +117,8 @@ public partial class AiPage : UserControl
     static string Friendly(Exception ex)
     {
         string m = ex.Message;
+        if (m.Contains("Not logged in", StringComparison.OrdinalIgnoreCase) || m.Contains("/login"))
+            return "O Claude Code ainda não está logado. Abra o PowerShell, rode  claude , digite  /login  e escolha a conta do Claude (assinatura). Depois é só perguntar de novo aqui.";
         if (m.Contains("401") || m.Contains("authentication", StringComparison.OrdinalIgnoreCase)) return "A chave da API não foi aceita. Confira em Configurações.";
         if (m.Contains("429") || m.Contains("rate", StringComparison.OrdinalIgnoreCase)) return "Muitas perguntas seguidas. Espere um pouco e tente de novo.";
         if (m.Contains("credit", StringComparison.OrdinalIgnoreCase) || m.Contains("billing", StringComparison.OrdinalIgnoreCase)) return "Sua conta da API está sem créditos.";
