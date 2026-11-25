@@ -220,6 +220,10 @@ public partial class MainWindow : Window
         Height = WinH;
         Full.Width = FullW;
         Full.Height = FullH;
+        // Avatar acompanha o tamanho do notch (no Grande ficava pequeno no meio do cartão).
+        double avatar = Big ? 150 : 104;
+        AvatarButton.Width = Avatar.Width = Avatar.Height = avatar;
+        Glow.Width = Glow.Height = avatar - 4;
         // shortcut: a janela (do tamanho do notch aberto) não sai da tela, então o notch para a ~230 px
         // dos cantos; para encostar no canto, deslocar o notch dentro da janela.
         double x = Math.Clamp(EdgePos * sw - WinW / 2, 0, sw - WinW), y = Math.Clamp(EdgePos * sh - WinH / 2, 0, sh - WinH);
