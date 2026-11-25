@@ -9,7 +9,22 @@ mod media;
 #[cfg(windows)]
 mod system;
 
-fn main() -> Result<(), slint::PlatformError> {
+/// Erros vão para %AppData%\Orbi\rust-erro.log (o app não tem console para mostrar).
+fn log_error(msg: &str) {
+    if let Some(dir) = std::env::var_os("APPDATA").map(|d| std::path::PathBuf::from(d).join("Orbi")) {
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::write(dir.join("rust-erro.log"), msg);
+    }
+}
+
+fn main() {
+    std::panic::set_hook(Box::new(|info| log_error(&format!("pane: {info}"))));
+    if let Err(e) = run() {
+        log_error(&format!("erro: {e}"));
+    }
+}
+
+fn run() -> Result<(), slint::PlatformError> {
     let notch = Notch::new()?;
     #[cfg(windows)]
     {
