@@ -77,11 +77,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp target/release/orbi.exe Orbi-rust.exe
-          # O GitHub às vezes responde erro 500 passageiro: tenta de novo.
+          # A etiqueta vem antes, pelo git: criar etiqueta e publicação juntas dava erro 500 no GitHub.
+          git tag -f rust-preview
+          git push -f origin rust-preview
           for i in 1 2 3; do
             gh release upload rust-preview Orbi-rust.exe --clobber && exit 0
-            # Título e texto sem acento: no Git Bash do Windows os acentos saem quebrados e o GitHub responde 500.
-            gh release create rust-preview Orbi-rust.exe --prerelease --title "Orbi em Rust (preview)" \
+            gh release create rust-preview Orbi-rust.exe --verify-tag --prerelease --title "Orbi em Rust (preview)" \
               --notes "Preview da versao em Rust. Nao substitui o Orbi atual: baixe e abra o Orbi-rust.exe para testar." && exit 0
             sleep $((i * 10))
           done
