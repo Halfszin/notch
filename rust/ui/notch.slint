@@ -156,7 +156,10 @@ export component Notch inherits Window {
     out property <length> closed-height: 32px;
 
     in-out property <bool> adding;
-    out property <bool> open: ta.has-hover || root.adding;
+    // O Rust decide pela posição do mouse (não depende do aviso de "mouse em cima" da janela).
+    in property <bool> hovered;
+    out property <bool> open: root.hovered || ta.has-hover || root.adding;
+    callback quit();
     in property <string> clock: "00:00";
     in property <string> closed-text: root.clock;
     in property <string> date-text;
@@ -277,7 +280,9 @@ export component Notch inherits Window {
                 HorizontalLayout {
                     width: 150px;
                     alignment: end;
+                    spacing: 6px;
                     AudioBars { playing: root.playing; }
+                    IconButton { glyph: "\u{E711}"; size: 10px; tint: #8E8E93; width: 24px; height: 24px; clicked => { root.quit(); } }
                 }
             }
 

@@ -57,6 +57,7 @@ jobs:
           }
           "vivo=$(-not $p.HasExited)" | Out-File ci\resultado.txt -Append
           if (Test-Path "$env:APPDATA\Orbi\rust-erro.log") { Copy-Item "$env:APPDATA\Orbi\rust-erro.log" ci\erro.log }
+          if (Test-Path "$env:APPDATA\Orbi\rust-diag.txt") { Copy-Item "$env:APPDATA\Orbi\rust-diag.txt" ci\diag.txt }
           if (-not $p.HasExited) { Stop-Process $p -Force }
 
       - name: Guardar prints no branch ci-results-rust

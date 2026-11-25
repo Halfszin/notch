@@ -30,6 +30,26 @@ pub fn setup(notch: &Notch) {
     })
     .ok();
 
+    notch.on_quit(|| { let _ = slint::quit_event_loop(); });
+
+    // Diagnóstico (rust-diag.txt): escala, tela e onde a janela ficou — para entender PCs onde o notch não abre.
+    let weak = notch.as_weak();
+    let diag = Timer::default();
+    diag.start(TimerMode::SingleShot, Duration::from_secs(3), move || {
+        let Some(n) = weak.upgrade() else { return };
+        n.window().with_winit_window(|w: &winit::window::Window| {
+            let screen = unsafe { (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(windows::Win32::UI::WindowsAndMessaging::SM_CYSCREEN)) };
+            let text = format!(
+                "escala={}\ntela={}x{}\njanela_pos={:?}\njanela_tam={:?}\nnotch_fechado={}x{}\n",
+                w.scale_factor(), screen.0, screen.1, w.outer_position(), w.outer_size(),
+                n.get_closed_width(), n.get_closed_height()
+            );
+            let _ = std::fs::create_dir_all(crate::store::dir());
+            let _ = std::fs::write(crate::store::dir().join("rust-diag.txt"), text);
+        });
+    });
+    std::mem::forget(diag);
+
     // Digitar uma tarefa: a janela passa a aceitar teclado só enquanto você digita (normalmente não rouba o foco).
     let weak = notch.as_weak();
     notch.on_want_keyboard(move || {
@@ -60,7 +80,9 @@ pub fn setup(notch: &Notch) {
             };
             let left = pos.x as f64 + (size.width as f64 - pw) / 2.0;
             let (cx, cy) = (cursor.x as f64, cursor.y as f64);
-            let inside = cx >= left && cx <= left + pw && cy >= pos.y as f64 && cy <= pos.y as f64 + ph;
+            // Margem de 2 px no topo da tela: encostar o mouse na borda também abre.
+            let inside = cx >= left && cx <= left + pw && cy >= pos.y as f64 - 2.0 && cy <= pos.y as f64 + ph;
+            n.set_hovered(inside);
             let _ = w.set_cursor_hittest(inside);
             // Notch fechou: volta a não roubar o foco.
             if !n.get_open() {
