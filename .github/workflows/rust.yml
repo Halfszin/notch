@@ -97,6 +97,13 @@ jobs:
           Click (($w + 620) / 2 - 91) 22
           Start-Sleep 1
           Shot "13-configuracoes"
+          # Fechar e abrir de novo pela engrenagem (antes não reabria).
+          [System.Windows.Forms.SendKeys]::SendWait("%{F4}")
+          Start-Sleep 1
+          Shot "13a-fechada"
+          Click (($w + 620) / 2 - 91) 22
+          Start-Sleep 1
+          Shot "13b-reaberta"
           "vivo=$(-not $p.HasExited)" | Out-File ci\resultado.txt -Append
           # Atualizador: 20 s depois de abrir compara com o versao.txt da prévia (outro commit) e troca o .exe.
           for ($i = 0; $i -lt 40 -and -not (Test-Path run\orbi.exe.old); $i++) { Start-Sleep 2 }

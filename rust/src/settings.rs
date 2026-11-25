@@ -1,6 +1,7 @@
 // Preferências da versão em Rust (%AppData%\Orbi\rust-config.json; o config.json é do Orbi em C#)
 // e a janela de Configurações, aberta pela engrenagem do notch.
 use serde::{Deserialize, Serialize};
+use slint::winit_030::WinitWindowAccessor;
 use slint::{ComponentHandle, Weak};
 use std::cell::RefCell;
 use std::sync::atomic::Ordering;
@@ -88,7 +89,13 @@ pub fn claim_instance() -> bool {
             });
             return true;
         }
-        if !after_update { unsafe { let _ = SetEvent(h); } }
+        if !after_update {
+            // Esta cópia acabou de ser aberta (tem o foco): deixa a outra trazer as configurações para a frente.
+            unsafe {
+                let _ = windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(windows::Win32::UI::WindowsAndMessaging::ASFW_ANY);
+                let _ = SetEvent(h);
+            }
+        }
         unsafe { let _ = windows::Win32::Foundation::CloseHandle(h); }
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
@@ -98,6 +105,8 @@ pub fn claim_instance() -> bool {
 pub fn show() {
     WINDOW.with(|cell| {
         let mut cell = cell.borrow_mut();
+        // Fechada pelo X: cria de novo, como na primeira vez (reabrir a mesma janela escondida falhava).
+        if cell.as_ref().is_some_and(|w| !w.window().is_visible()) { *cell = None; }
         if cell.is_none() {
             let Ok(w) = Settings::new() else { return };
             let weak = w.as_weak();
@@ -151,6 +160,14 @@ pub fn show() {
             w.set_update_ready(s.1);
         });
         let _ = w.show();
+        // Traz para a frente: aberta pelo notch (que não pega foco) ela podia ficar atrás das outras janelas.
+        w.window().with_winit_window(|ww: &slint::winit_030::winit::window::Window| {
+            ww.set_minimized(false);
+            ww.focus_window();
+            if let Some(h) = crate::system::hwnd_of(ww) {
+                unsafe { let _ = windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow(h); }
+            }
+        });
     });
 }
 

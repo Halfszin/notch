@@ -204,7 +204,7 @@ pub fn now() -> crate::taskparse::When {
     crate::taskparse::When { year: t.wYear as i32, month: t.wMonth as u32, day: t.wDay as u32, hour: t.wHour as u32, minute: t.wMinute as u32 }
 }
 
-fn hwnd_of(w: &winit::window::Window) -> Option<HWND> {
+pub fn hwnd_of(w: &winit::window::Window) -> Option<HWND> {
     use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
     match w.window_handle().ok()?.as_raw() {
         RawWindowHandle::Win32(h) => Some(HWND(h.hwnd.get() as *mut _)),
