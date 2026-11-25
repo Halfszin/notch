@@ -5,7 +5,7 @@ use std::time::Duration;
 use windows::Win32::Foundation::{HWND, POINT};
 use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetCursorPos, GetSystemMetrics, GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, GWL_EXSTYLE, HWND_TOPMOST,
+    GetCursorPos, GetSystemMetrics, GetWindowLongPtrW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, GWL_EXSTYLE, HWND_TOPMOST,
     SM_CXSCREEN, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
 };
 
@@ -30,6 +30,18 @@ pub fn setup(notch: &Notch) {
     })
     .ok();
 
+    // Digitar uma tarefa: a janela passa a aceitar teclado só enquanto você digita (normalmente não rouba o foco).
+    let weak = notch.as_weak();
+    notch.on_want_keyboard(move || {
+        let Some(n) = weak.upgrade() else { return };
+        n.window().with_winit_window(|w: &winit::window::Window| {
+            if let Some(hwnd) = hwnd_of(w) {
+                set_noactivate(hwnd, false);
+                unsafe { let _ = SetForegroundWindow(hwnd); }
+            }
+        });
+    });
+
     // A cada 30 ms: o clique só vale em cima do notch (o resto da janela deixa passar) e os olhos seguem o mouse.
     let weak = notch.as_weak();
     let fast = Timer::default();
@@ -50,6 +62,10 @@ pub fn setup(notch: &Notch) {
             let (cx, cy) = (cursor.x as f64, cursor.y as f64);
             let inside = cx >= left && cx <= left + pw && cy >= pos.y as f64 && cy <= pos.y as f64 + ph;
             let _ = w.set_cursor_hittest(inside);
+            // Notch fechou: volta a não roubar o foco.
+            if !n.get_open() {
+                if let Some(hwnd) = hwnd_of(w) { set_noactivate(hwnd, true); }
+            }
             // Centro aproximado do avatar (lado esquerdo do notch aberto).
             let ax = left + 18.0 * scale + 75.0 * scale;
             let ay = pos.y as f64 + 120.0 * scale;
@@ -83,6 +99,21 @@ pub fn setup(notch: &Notch) {
     tick();
     slow.start(TimerMode::Repeated, Duration::from_secs(1), tick);
     std::mem::forget(slow);
+}
+
+fn set_noactivate(hwnd: HWND, on: bool) {
+    unsafe {
+        let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        let flag = WS_EX_NOACTIVATE.0 as isize;
+        let want = if on { ex | flag } else { ex & !flag };
+        if want != ex { SetWindowLongPtrW(hwnd, GWL_EXSTYLE, want); }
+    }
+}
+
+/// Data de hoje "aaaa-mm-dd" (para zerar os copos de água a cada dia).
+pub fn today() -> String {
+    let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
+    format!("{:04}-{:02}-{:02}", t.wYear, t.wMonth, t.wDay)
 }
 
 fn hwnd_of(w: &winit::window::Window) -> Option<HWND> {

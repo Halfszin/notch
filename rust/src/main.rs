@@ -4,6 +4,9 @@
 slint::include_modules!();
 
 mod color;
+mod lyrics;
+mod pages;
+mod store;
 #[cfg(windows)]
 mod media;
 #[cfg(windows)]
@@ -30,6 +33,7 @@ fn run() -> Result<(), slint::PlatformError> {
     {
         system::setup(&notch);
         media::start(&notch);
+        pages::setup(&notch, system::today);
     }
     notch.run()
 }

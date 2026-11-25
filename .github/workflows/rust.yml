@@ -37,6 +37,10 @@ jobs:
           }
           $exe = "target\release\orbi.exe"
           "tamanho=$([math]::Round((Get-Item $exe).Length / 1MB, 1)) MB" | Out-File ci\resultado.txt
+          # Tarefas de exemplo (mesmo arquivo do Orbi em C#): 4 de 5 feitas.
+          New-Item -ItemType Directory "$env:APPDATA\Orbi" -Force | Out-Null
+          '[{"Title":"Revisar o relatorio","Done":true},{"Title":"Responder a Dina","Done":true},{"Title":"Postar a atualizacao","Done":true},{"Title":"Ligar pro banco","Done":true},{"Title":"Comprar pao","Due":"2026-11-25T18:00:00","Done":false}]' | Set-Content "$env:APPDATA\Orbi\tarefas.json" -Encoding utf8
+          Add-Type -Namespace W -Name M -MemberDefinition '[DllImport("user32.dll")] public static extern void mouse_event(uint f, int x, int y, int d, System.UIntPtr e);'
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 900, 700
           $p = Start-Process $exe -PassThru
           Start-Sleep 6
@@ -45,6 +49,12 @@ jobs:
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($w / 2)), 10
           Start-Sleep 2
           Shot "2-aberto"
+          # Rodinha do mouse para baixo = próxima página.
+          foreach ($name in "3-tarefas", "4-foco", "5-agua") {
+            [W.M]::mouse_event(0x0800, 0, 0, -120, [System.UIntPtr]::Zero)
+            Start-Sleep 1
+            Shot $name
+          }
           "vivo=$(-not $p.HasExited)" | Out-File ci\resultado.txt -Append
           if (Test-Path "$env:APPDATA\Orbi\rust-erro.log") { Copy-Item "$env:APPDATA\Orbi\rust-erro.log" ci\erro.log }
           if (-not $p.HasExited) { Stop-Process $p -Force }

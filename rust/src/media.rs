@@ -1,6 +1,6 @@
 // Música: o que está tocando no Windows (Spotify primeiro), com capa e a cor da capa para o degradê.
 use slint::{ComponentHandle, Image, Rgba8Pixel, SharedPixelBuffer};
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSession as Session, GlobalSystemMediaTransportControlsSessionManager as Manager,
@@ -24,6 +24,8 @@ pub fn start(notch: &Notch) {
     std::thread::spawn(move || {
         let Ok(manager) = Manager::RequestAsync().and_then(|op| op.join()) else { return };
         let mut last_key = String::new();
+        // Letra da música atual (buscada em outra thread quando a música muda).
+        let lyrics: Arc<Mutex<(String, Option<Vec<crate::lyrics::Line>>)>> = Arc::new(Mutex::new((String::new(), None)));
         loop {
             let session = current(&manager);
             if let Some(s) = &session {
@@ -40,7 +42,26 @@ pub fn start(notch: &Notch) {
             // Capa só quando a música muda (ler a imagem a cada segundo seria desperdício).
             let cover = if key != last_key { session.as_ref().and_then(cover_of) } else { None };
             let changed = key != last_key;
+            if changed {
+                if let Some(i) = &info {
+                    let (lyrics, key, artist, title, len) = (lyrics.clone(), key.clone(), i.artist.clone(), i.title.clone(), i.len);
+                    *lyrics.lock().unwrap() = (key.clone(), None);
+                    std::thread::spawn(move || {
+                        let found = crate::lyrics::fetch(&artist, &title, len);
+                        let mut l = lyrics.lock().unwrap();
+                        if l.0 == key { l.1 = found; } // ainda é a mesma música
+                    });
+                }
+            }
             last_key = key;
+            // Linhas da letra em volta do ponto atual.
+            let lines: Option<[String; 4]> = info.as_ref().and_then(|i| {
+                let l = lyrics.lock().unwrap();
+                let all = l.1.as_ref()?;
+                let at = crate::lyrics::index_at(all, i.pos + 0.3); // um pouco adiantado: a linha acende quando começa a ser cantada
+                let get = |k: Option<usize>| k.and_then(|k| all.get(k)).map(|x| x.text.clone()).unwrap_or_default();
+                Some([get(at.and_then(|a| a.checked_sub(1))), get(at), get(Some(at.map_or(0, |a| a + 1))), get(Some(at.map_or(1, |a| a + 2)))])
+            });
             let weak = weak.clone();
             let _ = slint::invoke_from_event_loop(move || {
                 let Some(n) = weak.upgrade() else { return };
@@ -59,6 +80,13 @@ pub fn start(notch: &Notch) {
                         n.set_playing(false);
                         n.set_progress(0.0);
                     }
+                }
+                n.set_has_lyrics(lines.is_some());
+                if let Some([prev, now, next, next2]) = lines {
+                    n.set_lyric_prev(prev.into());
+                    n.set_lyric_now(if now.is_empty() { "♪".into() } else { now.into() });
+                    n.set_lyric_next(next.into());
+                    n.set_lyric_next2(next2.into());
                 }
                 if changed {
                     match cover {
@@ -86,7 +114,7 @@ fn current(manager: &Manager) -> Option<Session> {
     manager.GetCurrentSession().ok()
 }
 
-struct Info { title: String, artist: String, playing: bool, progress: f32, elapsed: String, remaining: String }
+struct Info { title: String, artist: String, playing: bool, progress: f32, elapsed: String, remaining: String, pos: f64, len: f64 }
 
 fn read(s: &Session) -> Option<Info> {
     let props = s.TryGetMediaPropertiesAsync().ok()?.join().ok()?;
@@ -111,6 +139,8 @@ fn read(s: &Session) -> Option<Info> {
         progress: ratio as f32,
         elapsed: fmt(len * ratio),
         remaining: format!("-{}", fmt(len * (1.0 - ratio))),
+        pos,
+        len,
     })
 }
 
