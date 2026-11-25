@@ -529,6 +529,7 @@ export component Notch inherits Window {
                         IconButton { glyph: "\u{E76C}"; size: 11px; clicked => { root.month-next(); } }
                     }
                     HorizontalLayout {
+                        height: root.compact ? 14px : self.preferred-height;
                         for d in ["D", "S", "T", "Q", "Q", "S", "S"] : Text { text: d; color: #8E8E93; font-size: 11px; horizontal-alignment: center; }
                     }
                     for row in 6 : HorizontalLayout {
