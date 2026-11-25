@@ -22,6 +22,9 @@ pub struct Prefs {
     pub gradient: bool,
     pub auto_update: bool,
     pub compact: bool,
+    /// Borda (0 = topo, 1 = esquerda, 2 = direita) e onde nela (0 a 1), como no Orbi em C#.
+    pub edge: i32,
+    pub edge_pos: f32,
     /// Páginas na ordem das bolinhas (id = posição na lista PAGES) e se aparecem.
     pub pages: Vec<PageCfg>,
 }
@@ -38,7 +41,7 @@ const PAGES: [&str; 8] = ["Tocando", "Tarefas", "Foco", "Calendário", "Notas", 
 impl Default for Prefs {
     fn default() -> Self {
         Prefs {
-            battery_alerts: true, audio_alerts: true, reminders: true, lyrics: true, gradient: true, auto_update: true, compact: false,
+            battery_alerts: true, audio_alerts: true, reminders: true, lyrics: true, gradient: true, auto_update: true, compact: false, edge: 0, edge_pos: 0.5,
             pages: (0..PAGES.len()).map(|id| PageCfg { id, visible: true }).collect(),
         }
     }
@@ -79,6 +82,8 @@ pub fn setup(notch: &Notch) {
     let prefs = get();
     notch.set_gradient_enabled(prefs.gradient);
     notch.set_compact(prefs.compact);
+    notch.set_edge(prefs.edge.clamp(0, 2));
+    notch.set_edge_pos(prefs.edge_pos.clamp(0.0, 1.0));
     apply_pages(notch, &prefs.pages);
     updater::AUTO.store(prefs.auto_update, Ordering::Relaxed);
     NOTCH.with(|n| *n.borrow_mut() = Some(notch.as_weak()));
@@ -88,6 +93,16 @@ pub fn setup(notch: &Notch) {
     if !std::env::args().any(|a| a == "--startup") {
         let _ = slint::invoke_from_event_loop(show);
     }
+}
+
+/// Soltou o notch depois de arrastar: guarda a borda e o lugar.
+pub fn save_edge(edge: i32, pos: f32) {
+    let mut prefs = get();
+    prefs.edge = edge;
+    prefs.edge_pos = pos;
+    crate::store::save(FILE, &prefs);
+    WINDOW.with(|w| if let Some(w) = &*w.borrow() { w.set_edge(edge); });
+    PREFS.with(|p| *p.borrow_mut() = prefs);
 }
 
 /// O atualizador conta o que está fazendo; quando a versão nova fica pronta, o notch avisa.
@@ -152,6 +167,9 @@ pub fn show() {
                     gradient: w.get_gradient(),
                     auto_update: w.get_auto_update(),
                     compact: w.get_compact(),
+                    // Trocou de borda nas configurações: começa no meio dela.
+                    edge: w.get_edge(),
+                    edge_pos: if w.get_edge() == get().edge { get().edge_pos } else { 0.5 },
                     pages: get().pages,
                 };
                 crate::store::save(FILE, &prefs);
@@ -159,6 +177,8 @@ pub fn show() {
                 if let Some(n) = NOTCH.with(|n| n.borrow().as_ref().and_then(|w| w.upgrade())) {
                     n.set_gradient_enabled(prefs.gradient);
                     n.set_compact(prefs.compact);
+                    n.set_edge(prefs.edge);
+                    n.set_edge_pos(prefs.edge_pos);
                     if !prefs.lyrics { n.set_has_lyrics(false); }
                 }
                 PREFS.with(|p| *p.borrow_mut() = prefs);
@@ -195,6 +215,7 @@ pub fn show() {
         w.set_gradient(p.gradient);
         w.set_auto_update(p.auto_update);
         w.set_compact(p.compact);
+        w.set_edge(p.edge);
         set_page_list(w, &p.pages);
         w.set_start_with_windows(autostart());
         STATUS.with(|s| {

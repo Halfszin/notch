@@ -69,9 +69,39 @@ pub fn setup(notch: &Notch) {
 
     // A cada 30 ms: abre quando o mouse está sobre o notch; a janela cresce ao abrir e encolhe
     // (depois da animação de fechar) ao fechar. Os olhos seguem o mouse.
+    // Arrastar pelas bordas (como no Orbi em C#): segurou o fundo do notch aberto e moveu mais de 8 px,
+    // ele fecha e corre pela borda mais perto do cursor; ao soltar, guarda onde ficou.
+    let drag_from: std::rc::Rc<std::cell::Cell<Option<(i32, i32)>>> = Default::default();
+    let d = drag_from.clone();
+    notch.on_drag_start(move || {
+        let mut c = POINT::default();
+        if unsafe { GetCursorPos(&mut c) }.is_ok() { d.set(Some((c.x, c.y))); }
+    });
+    let (d, weak) = (drag_from.clone(), notch.as_weak());
+    notch.on_drag_move(move || {
+        let (Some(n), Some((fx, fy))) = (weak.upgrade(), d.get()) else { return };
+        let mut c = POINT::default();
+        if unsafe { GetCursorPos(&mut c) }.is_err() { return; }
+        if !n.get_dragging() && ((c.x - fx).pow(2) + (c.y - fy).pow(2)) < 64 { return; } // clique normal não arrasta
+        n.set_dragging(true);
+        let (sw, sh) = unsafe { (GetSystemMetrics(SM_CXSCREEN) as f32, GetSystemMetrics(windows::Win32::UI::WindowsAndMessaging::SM_CYSCREEN) as f32) };
+        let (edge, pos) = nearest_edge(c.x as f32, c.y as f32, sw, sh);
+        n.set_edge(edge);
+        n.set_edge_pos(pos);
+    });
+    let (d, weak) = (drag_from, notch.as_weak());
+    notch.on_drag_end(move || {
+        d.set(None);
+        let Some(n) = weak.upgrade() else { return };
+        if n.get_dragging() {
+            n.set_dragging(false);
+            crate::settings::save_edge(n.get_edge(), n.get_edge_pos());
+        }
+    });
+
     let weak = notch.as_weak();
     let big = std::rc::Rc::new(std::cell::Cell::new(true));
-    let size_now = std::rc::Rc::new(std::cell::Cell::new((n_big_w(notch), n_big_h(notch))));
+    let size_now = std::rc::Rc::new(std::cell::Cell::new((n_big_w(notch), n_big_h(notch), 0, 0.5f32)));
     let close_at: std::rc::Rc<std::cell::Cell<Option<std::time::Instant>>> = Default::default();
     let fast = Timer::default();
     fast.start(TimerMode::Repeated, Duration::from_millis(30), move || {
@@ -87,10 +117,15 @@ pub fn setup(notch: &Notch) {
             } else {
                 (n.get_closed_width() as f64 * scale, n.get_closed_height() as f64 * scale)
             };
-            let left = pos.x as f64 + (size.width as f64 - pw) / 2.0;
+            let edge = n.get_edge();
+            // Onde o notch está dentro da janela (encostado na borda dela).
+            let (sw_win, sh_win) = (size.width as f64, size.height as f64);
+            let left = pos.x as f64 + match edge { 1 => 0.0, 2 => sw_win - pw, _ => (sw_win - pw) / 2.0 };
+            let top = pos.y as f64 + if edge == 0 { 0.0 } else { (sh_win - ph) / 2.0 };
             let (cx, cy) = (cursor.x as f64, cursor.y as f64);
-            // Margem de 2 px no topo da tela: encostar o mouse na borda também abre.
-            let inside = cx >= left && cx <= left + pw && cy >= pos.y as f64 - 2.0 && cy <= pos.y as f64 + ph;
+            // Margem de 2 px do lado da borda da tela: encostar o mouse na borda também abre.
+            let (ml, mr, mt) = match edge { 1 => (2.0, 0.0, 0.0), 2 => (0.0, 2.0, 0.0), _ => (0.0, 0.0, 2.0) };
+            let inside = cx >= left - ml && cx <= left + pw + mr && cy >= top - mt && cy <= top + ph;
             n.set_hovered(inside);
 
             let open = n.get_open();
@@ -108,14 +143,15 @@ pub fn setup(notch: &Notch) {
                 close_at.set(Some(std::time::Instant::now() + Duration::from_millis(450))); // deixa a animação de fechar terminar
             }
             let want_big = lw >= n.get_big_width();
-            let changed = (lw, lh) != size_now.get();
-            if changed {
-                size_now.set((lw, lh));
+            let now_state = (lw, lh, edge, n.get_edge_pos());
+            if now_state != size_now.get() {
+                size_now.set(now_state);
                 big.set(want_big);
                 if !want_big { close_at.set(None); }
-                let screen_w = unsafe { GetSystemMetrics(SM_CXSCREEN) } as f64;
+                let (sw, sh) = unsafe { (GetSystemMetrics(SM_CXSCREEN) as f64, GetSystemMetrics(windows::Win32::UI::WindowsAndMessaging::SM_CYSCREEN) as f64) };
                 let _ = w.request_inner_size(winit::dpi::LogicalSize::new(lw as f64, lh as f64));
-                w.set_outer_position(winit::dpi::PhysicalPosition::new(((screen_w - lw as f64 * scale) / 2.0) as i32, 0));
+                let (x, y) = window_pos(edge, n.get_edge_pos() as f64, lw as f64 * scale, lh as f64 * scale, sw, sh);
+                w.set_outer_position(winit::dpi::PhysicalPosition::new(x as i32, y as i32));
             }
 
             // Notas abertas: a janela aceita teclado (clicar no texto já deixa digitar).
@@ -126,7 +162,7 @@ pub fn setup(notch: &Notch) {
             }
             // Centro aproximado do avatar (lado esquerdo do notch aberto).
             let ax = left + 46.0 * scale + 70.0 * scale;
-            let ay = pos.y as f64 + 120.0 * scale;
+            let ay = top + 120.0 * scale;
             n.set_look_x(((cx - ax) / (250.0 * scale)).clamp(-1.0, 1.0) as f32);
             n.set_look_y(((ay - cy) / (250.0 * scale)).clamp(-1.0, 1.0) as f32);
         });
@@ -196,6 +232,8 @@ pub fn setup(notch: &Notch) {
         let Some(n) = weak.upgrade() else { return };
         let (clock, date) = now_text();
         n.set_clock(clock.into());
+        // Nas laterais a hora fica em pé ("19" em cima de "54").
+        n.set_side_text(n.get_closed_text().replace(':', "\n").into());
         n.set_date_text(date.into());
         let mut p = SYSTEM_POWER_STATUS::default();
         if unsafe { GetSystemPowerStatus(&mut p) }.is_ok() {
@@ -226,6 +264,42 @@ fn set_noactivate(hwnd: HWND, on: bool) {
         let flag = WS_EX_NOACTIVATE.0 as isize;
         let want = if on { ex | flag } else { ex & !flag };
         if want != ex { SetWindowLongPtrW(hwnd, GWL_EXSTYLE, want); }
+    }
+}
+
+/// Borda mais perto do cursor (0 = topo, 1 = esquerda, 2 = direita) e onde nela (0 a 1), como no Orbi em C#.
+pub fn nearest_edge(x: f32, y: f32, sw: f32, sh: f32) -> (i32, f32) {
+    if y < x.min(sw - x) { (0, (x / sw).clamp(0.0, 1.0)) }
+    else if x < sw - x { (1, (y / sh).clamp(0.0, 1.0)) }
+    else { (2, (y / sh).clamp(0.0, 1.0)) }
+}
+
+/// Canto da janela para o notch ficar encostado na borda, centrado em `pos`, sem sair da tela.
+pub fn window_pos(edge: i32, pos: f64, w: f64, h: f64, sw: f64, sh: f64) -> (f64, f64) {
+    let along = |p: f64, size: f64, screen: f64| (p * screen - size / 2.0).clamp(0.0, (screen - size).max(0.0));
+    match edge {
+        1 => (0.0, along(pos, h, sh)),
+        2 => (sw - w, along(pos, h, sh)),
+        _ => (along(pos, w, sw), 0.0),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn borda_mais_perto() {
+        assert_eq!(nearest_edge(960.0, 5.0, 1920.0, 1080.0).0, 0);
+        assert_eq!(nearest_edge(10.0, 500.0, 1920.0, 1080.0), (1, 500.0 / 1080.0));
+        assert_eq!(nearest_edge(1915.0, 540.0, 1920.0, 1080.0), (2, 0.5));
+    }
+
+    #[test]
+    fn janela_nao_sai_da_tela() {
+        assert_eq!(window_pos(0, 0.5, 200.0, 40.0, 1920.0, 1080.0), (860.0, 0.0));
+        assert_eq!(window_pos(0, 0.0, 200.0, 40.0, 1920.0, 1080.0), (0.0, 0.0));
+        assert_eq!(window_pos(2, 1.0, 40.0, 120.0, 1920.0, 1080.0), (1880.0, 960.0));
     }
 }
 

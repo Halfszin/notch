@@ -164,19 +164,31 @@ export component Notch inherits Window {
     out property <length> open-width: root.compact ? 544px : 620px;
     out property <length> open-height: root.compact ? 232px : 262px;
     in property <bool> has-media;
+    // Borda onde o notch fica (0 = topo, 1 = esquerda, 2 = direita), como no Orbi em C#. Nas laterais
+    // o notch fechado fica em pé: anel, barrinhas e a hora com as horas em cima dos minutos.
+    in property <int> edge: 0;
+    property <bool> side: root.edge != 0;
+    in property <string> side-text;
+    // Onde na borda (0 a 1: da esquerda para a direita no topo, de cima para baixo nas laterais). Só o Rust usa.
+    in-out property <float> edge-pos: 0.5;
+    // Arrastando o notch pela borda: fica fechado enquanto anda.
+    in property <bool> dragging;
+    callback drag-start();
+    callback drag-move();
+    callback drag-end();
     // Como no Orbi em C#: barrinhas só enquanto toca; sem música o notch volta ao tamanho de só anel + hora.
-    out property <length> closed-width: root.playing ? 160px : 132px;
+    out property <length> closed-width: root.side ? 34px : root.playing ? 160px : 132px;
     // Visualizador (como o Wallpaper Engine): 4 faixas do som e o grave, que faz o notch fechado pulsar.
     in property <[float]> bands: [0, 0, 0, 0, 0];
     in property <float> level;
     // Batida (0 a 1): salta no bumbo e cai rápido.
     in property <float> pulse;
-    out property <length> closed-height: 32px;
+    out property <length> closed-height: !root.side ? 32px : root.playing ? 116px : 92px;
 
     in-out property <bool> adding;
     // O Rust decide pela posição do mouse (não depende do aviso de "mouse em cima" da janela).
     in property <bool> hovered;
-    out property <bool> open: root.hovered || ta.has-hover || root.adding || root.notes-focused;
+    out property <bool> open: !root.dragging && (root.hovered || ta.has-hover || root.adding || root.notes-focused);
     callback quit();
     callback open-settings();
     in property <bool> gradient-enabled: true;
@@ -274,7 +286,8 @@ export component Notch inherits Window {
     callback focus-preset(int);
 
 
-    property <color> ring-color: !root.has-battery ? #8E8E93 : (root.battery <= 0.2 && !root.charging ? #FF453A : #30D158);
+    // Bateria: verde (carregando ou acima de 50%), amarelo (21–50%), vermelho (20% ou menos).
+    property <color> ring-color: !root.has-battery ? #8E8E93 : root.charging || root.battery > 0.5 ? #30D158 : root.battery > 0.2 ? #FFD60A : #FF453A;
     property <bool> music-glow: root.page == 0 && root.has-cover && root.gradient-enabled;
 
     property <length> pill-w: root.open ? root.open-width : root.toasting ? root.toast-width : root.closed-width;
@@ -287,17 +300,26 @@ export component Notch inherits Window {
         width: root.pill-w;
         height: root.pill-h;
         transform-scale: root.beat-scale;
-        transform-origin: { x: self.width / 2, y: 0 };
-        x: (root.width - self.width) / 2;
-        y: 0;
-        border-bottom-left-radius: root.open ? 30px : 16px;
-        border-bottom-right-radius: root.open ? 30px : 16px;
-        animate border-bottom-left-radius, border-bottom-right-radius { duration: 300ms; }
+        // Encostado na borda: cresce a partir dela; arredonda só os cantos do lado de dentro.
+        transform-origin: root.edge == 1 ? { x: 0, y: self.height / 2 } : root.edge == 2 ? { x: self.width, y: self.height / 2 } : { x: self.width / 2, y: 0 };
+        x: root.edge == 1 ? 0 : root.edge == 2 ? root.width - self.width : (root.width - self.width) / 2;
+        y: root.side ? (root.height - self.height) / 2 : 0;
+        property <length> r: root.open ? 30px : 16px;
+        border-top-left-radius: root.edge == 2 ? self.r : 0;
+        border-top-right-radius: root.edge == 1 ? self.r : 0;
+        border-bottom-left-radius: root.edge != 1 ? self.r : 0;
+        border-bottom-right-radius: root.edge != 2 ? self.r : 0;
         clip: true;
         // Fechado: preto. Música aberta: degradê do preto para a cor da capa (estilo Nusa).
         background: root.open && root.music-glow ? @linear-gradient(180deg, #000000 0%, #000000 30%, root.accent 100%) : #000000;
 
         ta := TouchArea {
+            // Segurar e arrastar o fundo do notch: ele corre pela borda e pula para a borda mais perto.
+            pointer-event(e) => {
+                if (e.button == PointerEventButton.left && e.kind == PointerEventKind.down) { root.drag-start(); }
+                if (e.button == PointerEventButton.left && e.kind == PointerEventKind.up) { root.drag-end(); }
+            }
+            moved => { if (self.pressed) { root.drag-move(); } }
             // Rodinha do mouse troca de página.
             scroll-event(e) => {
                 if (e.delta-y < 0) { root.pos = Math.min(root.pos + 1, root.pages - 1); }
@@ -307,7 +329,16 @@ export component Notch inherits Window {
         }
 
         // ---- fechado: anel da bateria + hora (ou o timer, quando corre) ----
-        HorizontalLayout {
+        if root.side : VerticalLayout {
+            opacity: root.open || root.toasting ? 0 : 1;
+            animate opacity { duration: 150ms; }
+            alignment: center;
+            spacing: 6px;
+            HorizontalLayout { alignment: center; Ring { value: root.battery; tint: root.ring-color; bolt: root.charging; } }
+            if root.playing : HorizontalLayout { alignment: center; AudioBars { playing: true; bands: root.bands; tint: #30D158; } }
+            Text { text: root.side-text; color: root.focus-running ? #FF9F0A : white; font-size: 13px; font-weight: 600; horizontal-alignment: center; }
+        }
+        if !root.side : HorizontalLayout {
             opacity: root.open || root.toasting ? 0 : 1;
             animate opacity { duration: 150ms; }
             alignment: center;
@@ -806,6 +837,7 @@ export component Settings inherits Window {
     in-out property <bool> gradient: true;
     in-out property <bool> auto-update: true;
     in-out property <bool> compact;
+    in-out property <int> edge;
     in property <string> version;
     in property <string> update-status;
     in property <bool> update-ready;
@@ -912,6 +944,32 @@ export component Settings inherits Window {
                         s0 := SectionLabel { text: "NOTCH"; height: 46px; vertical-alignment: bottom; }
                         Rectangle { height: 10px; }
                         Card {
+                            Row {
+                                title: "Onde o notch fica";
+                                sub: "Você também pode segurar o fundo do notch aberto e arrastar pela borda da tela.";
+                                VerticalLayout {
+                                    alignment: center;
+                                    Rectangle {
+                                        height: 32px;
+                                        width: eseg.preferred-width + 6px;
+                                        border-radius: 8px;
+                                        background: #1C1C1F;
+                                        eseg := HorizontalLayout {
+                                            x: 3px;
+                                            padding-top: 3px;
+                                            padding-bottom: 3px;
+                                            for opt[i] in ["Topo", "Esquerda", "Direita"] : Rectangle {
+                                                width: et.preferred-width + 32px;
+                                                border-radius: 6px;
+                                                background: i == root.edge ? #3A3A3E : transparent;
+                                                et := Text { text: opt; font-size: 13px; color: i == root.edge ? white : #C7C7CC; horizontal-alignment: center; vertical-alignment: center; }
+                                                TouchArea { mouse-cursor: pointer; clicked => { root.edge = i; root.changed(); } }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Divider { }
                             Row {
                                 title: "Tamanho do notch aberto";
                                 sub: "Grande deixa mais espaço para as listas, a letra e o calendário.";
