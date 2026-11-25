@@ -19,6 +19,8 @@ public sealed class Config
     public bool AppNotifications { get; set; } = true;
     public string? ApiKeyProtected { get; set; }
     public int AgentPort { get; set; } = 47821;
+    public string NotchSize { get; set; } = "grande";           // "grande" ou "compacto"
+    public List<string> HiddenTabs { get; set; } = new();       // abas tiradas do acesso rápido (tags)
     // Código secreto que vai no endereço dos hooks: sem ele o Orbi recusa o evento.
     public string AgentToken { get; set; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
 

@@ -19,9 +19,13 @@ namespace Orbi;
 
 public partial class MainWindow : Window
 {
-    const double FullW = 544, FullH = 232;
+    // Tamanho do notch aberto (Configurações → Notch → Tamanho).
+    static bool Big => Config.Current.NotchSize != "compacto";
+    static double FullW => Big ? 700 : 544;
+    static double FullH => Big ? 330 : 232;
     // Folga em volta do notch aberto para a animação com "mola" passar um pouco do tamanho final sem cortar.
-    const double WinW = FullW + 24, WinH = FullH + 16;
+    static double WinW => FullW + 24;
+    static double WinH => FullH + 16;
     static readonly string EdgeFile = System.IO.Path.Combine(App.Dir, "edge.txt");
     static readonly CultureInfo PtBr = new("pt-BR");
     static readonly Brush Green = new SolidColorBrush(Color.FromRgb(0x30, 0xD1, 0x58));
@@ -67,6 +71,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _barRects = new[] { Bar1, Bar2, Bar3, Bar4, Bar5 };
+        ApplyTabs();
         // edge.txt: "Top 0.5" (borda e posição ao longo dela). Arquivo antigo tinha só a borda.
         string[] saved = { "Top" };
         try { saved = File.ReadAllText(EdgeFile).Split(' ', StringSplitOptions.RemoveEmptyEntries); } catch { }
@@ -213,6 +218,8 @@ public partial class MainWindow : Window
         double sw = SystemParameters.PrimaryScreenWidth, sh = SystemParameters.PrimaryScreenHeight;
         Width = WinW;
         Height = WinH;
+        Full.Width = FullW;
+        Full.Height = FullH;
         // shortcut: a janela (do tamanho do notch aberto) não sai da tela, então o notch para a ~230 px
         // dos cantos; para encostar no canto, deslocar o notch dentro da janela.
         double x = Math.Clamp(EdgePos * sw - WinW / 2, 0, sw - WinW), y = Math.Clamp(EdgePos * sh - WinH / 2, 0, sh - WinH);
@@ -462,6 +469,19 @@ public partial class MainWindow : Window
     }
 
     void Settings_Click(object s, RoutedEventArgs e) => App.OpenSettings();
+
+    public void ApplySize() => SetEdge(Edge, EdgePos, save: false);
+
+    /// <summary>Esconde as abas que você tirou do acesso rápido (a Início fica sempre).</summary>
+    public void ApplyTabs()
+    {
+        foreach (var tab in TabBar.Children.OfType<RadioButton>())
+        {
+            bool hidden = (string)tab.Tag != "home" && Config.Current.HiddenTabs.Contains((string)tab.Tag);
+            tab.Visibility = hidden ? Visibility.Collapsed : Visibility.Visible;
+            if (hidden && tab.IsChecked == true) TabHome.IsChecked = true;
+        }
+    }
     void Exit_Click(object s, RoutedEventArgs e) => Application.Current.Shutdown();
 
     // ---------- humor do avatar ----------

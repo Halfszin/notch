@@ -179,7 +179,7 @@
             </StackPanel>
 
             <!-- Aberto -->
-            <Grid x:Name="Full" Width="544" Height="232" Opacity="0" IsHitTestVisible="False">
+            <Grid x:Name="Full" Opacity="0" IsHitTestVisible="False">
                 <Grid Margin="14,6,14,14">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="34"/>
@@ -211,7 +211,7 @@
                             <TextBlock x:Name="ClockFull" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
                         </StackPanel>
                         <!-- Abas em cima, como no coucou -->
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                    <StackPanel x:Name="TabBar" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
                         <RadioButton x:Name="TabHome" Style="{StaticResource Tab}" Content="&#xE80F;" Tag="home" IsChecked="True" Checked="Tab_Checked"
                                      ToolTip="Início" AutomationProperties.Name="Início" Margin="1,0"/>
                         <RadioButton Style="{StaticResource Tab}" Content="&#xE787;" Tag="calendar" Checked="Tab_Checked"

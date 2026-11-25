@@ -66,7 +66,14 @@ public partial class AiPage : UserControl
 
     async void AskInput_KeyDown(object s, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter || string.IsNullOrWhiteSpace(AskInput.Text) || _pending != null) return;
+        if (e.Key == Key.Enter) await Send();
+    }
+
+    async void Send_Click(object s, RoutedEventArgs e) => await Send();
+
+    async Task Send()
+    {
+        if (string.IsNullOrWhiteSpace(AskInput.Text) || _pending != null) return;
         string question = AskInput.Text.Trim();
         // A assinatura (Claude Code) vem primeiro: a chave da API é cobrada por uso e fica só de reserva.
         string? cli = ClaudeCli.Find();
@@ -130,11 +137,11 @@ public partial class AiPage : UserControl
         var box = new TextBox
         {
             Text = text, IsReadOnly = true, BorderThickness = new Thickness(0), Background = Brushes.Transparent, TextWrapping = TextWrapping.Wrap,
-            Foreground = muted ? Brushes.Gray : Brushes.White, FontSize = 12.5, Padding = new Thickness(0), SelectionBrush = new SolidColorBrush(Color.FromRgb(0x30, 0xD1, 0x58)),
+            Foreground = muted ? Brushes.Gray : Brushes.White, FontSize = 13, Padding = new Thickness(0), SelectionBrush = new SolidColorBrush(Color.FromRgb(0x30, 0xD1, 0x58)),
         };
         var bubble = new Border
         {
-            Child = box, CornerRadius = new CornerRadius(10), Padding = new Thickness(9, 5, 9, 5), Margin = new Thickness(user ? 50 : 0, 2, user ? 4 : 30, 2),
+            Child = box, CornerRadius = new CornerRadius(14), Padding = new Thickness(12, 7, 12, 7), Margin = new Thickness(user ? 80 : 0, 3, user ? 4 : 60, 3),
             HorizontalAlignment = user ? HorizontalAlignment.Right : HorizontalAlignment.Left,
             Background = new SolidColorBrush(user ? Color.FromRgb(0x2C, 0x2C, 0x33) : Color.FromRgb(0x1B, 0x1B, 0x1F)),
         };

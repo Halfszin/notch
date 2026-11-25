@@ -70,6 +70,32 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="Chip" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#C7C7CC"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,8,8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Border x:Name="b" Background="#232326" CornerRadius="15" Padding="12,6" BorderBrush="#2E2E33" BorderThickness="1">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="mark" Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="11" Margin="0,2,7,0" Visibility="Collapsed"/>
+                                <ContentPresenter/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#1F3A28"/>
+                                <Setter TargetName="b" Property="BorderBrush" Value="#30D158"/>
+                                <Setter TargetName="mark" Property="Visibility" Value="Visible"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="PillBtn" TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="FontSize" Value="13"/>
@@ -165,6 +191,25 @@
                                 <CheckBox x:Name="StartupSwitch" Style="{StaticResource Switch}" HorizontalAlignment="Right" VerticalAlignment="Center"
                                           AutomationProperties.Name="Iniciar com o Windows" Click="Startup_Click"/>
                             </Grid>
+                            <Border Height="1" Background="#232326" Margin="18,0"/>
+                            <Grid Style="{StaticResource Row}">
+                                <StackPanel Margin="0,0,220,0">
+                                    <TextBlock Text="Tamanho do notch aberto" Style="{StaticResource RowTitle}"/>
+                                    <TextBlock Text="Grande deixa mais espaço para o chat, as listas e o calendário." Style="{StaticResource RowSub}"/>
+                                </StackPanel>
+                                <Border HorizontalAlignment="Right" VerticalAlignment="Center" Background="#232326" CornerRadius="8" Padding="3">
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton x:Name="SizeBig" Content="Grande" Style="{StaticResource Seg}" GroupName="Size" Tag="grande" Checked="Size_Checked"/>
+                                        <RadioButton x:Name="SizeSmall" Content="Compacto" Style="{StaticResource Seg}" GroupName="Size" Tag="compacto" Checked="Size_Checked"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                            <Border Height="1" Background="#232326" Margin="18,0"/>
+                            <StackPanel Margin="18,14">
+                                <TextBlock Text="Abas no acesso rápido" Style="{StaticResource RowTitle}"/>
+                                <TextBlock Text="Escolha o que aparece no notch. A aba Início fica sempre." Style="{StaticResource RowSub}"/>
+                                <WrapPanel x:Name="TabChips" Margin="0,10,0,0"/>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
 

@@ -24,6 +24,14 @@ public partial class SettingsWindow : Window
         CityStatus.Text = Config.Current.City == null ? "Escreva sua cidade para ver o clima no notch." : $"Mostrando o clima de {Config.Current.City}.";
         ShowKeyStatus();
         NotifSwitch.IsChecked = Config.Current.AppNotifications;
+        (Config.Current.NotchSize == "compacto" ? SizeSmall : SizeBig).IsChecked = true;
+        foreach (var (tag, name) in new[] { ("calendar", "Calendário"), ("shelf", "Bandeja"), ("clip", "Área de transferência"), ("notes", "Notas"),
+                                            ("system", "Sistema"), ("todo", "Tarefas"), ("shortcuts", "Atalhos"), ("ai", "IA") })
+        {
+            var chip = new CheckBox { Content = name, Tag = tag, Style = (Style)FindResource("Chip"), IsChecked = !Config.Current.HiddenTabs.Contains(tag) };
+            chip.Click += Tab_Click;
+            TabChips.Children.Add(chip);
+        }
         ShowAgentsStatus();
         VersionText.Text = $"Orbi {Updater.Current}";
         Updater.Changed += ShowUpdate;
@@ -128,6 +136,24 @@ public partial class SettingsWindow : Window
         KeyInput.Clear();
         SaveConfig(null, KeyStatus);
         ShowKeyStatus();
+    }
+
+    void Size_Checked(object s, RoutedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        Config.Current.NotchSize = (string)((RadioButton)s).Tag;
+        SaveConfig(null, null);
+        App.OrbiWindow.ApplySize();
+    }
+
+    void Tab_Click(object s, RoutedEventArgs e)
+    {
+        var chip = (CheckBox)s;
+        string tag = (string)chip.Tag;
+        Config.Current.HiddenTabs.Remove(tag);
+        if (chip.IsChecked != true) Config.Current.HiddenTabs.Add(tag);
+        SaveConfig(null, null);
+        App.OrbiWindow.ApplyTabs();
     }
 
     void ShowAgentsStatus(string? extra = null)
