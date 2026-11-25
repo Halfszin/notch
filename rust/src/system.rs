@@ -100,9 +100,8 @@ pub fn setup(notch: &Notch) {
     });
 
     let weak = notch.as_weak();
-    let big = std::rc::Rc::new(std::cell::Cell::new(true));
-    let size_now = std::rc::Rc::new(std::cell::Cell::new((n_big_w(notch), n_big_h(notch), 0, 0.5f32)));
-    let close_at: std::rc::Rc<std::cell::Cell<Option<std::time::Instant>>> = Default::default();
+    let hit = std::rc::Rc::new(std::cell::Cell::new(true));
+    let placed: std::rc::Rc<std::cell::Cell<Option<(i32, f32)>>> = Default::default();
     let fast = Timer::default();
     fast.start(TimerMode::Repeated, Duration::from_millis(30), move || {
         let Some(n) = weak.upgrade() else { return };
@@ -129,28 +128,21 @@ pub fn setup(notch: &Notch) {
             n.set_hovered(inside);
 
             let open = n.get_open();
-            let (lw, lh) = if open || close_at.get().is_some_and(|t| std::time::Instant::now() < t) {
-                (n.get_big_width(), n.get_big_height())
-            } else if n.get_toasting() {
-                (n.get_toast_width(), n.get_toast_height())
-            } else {
-                // Folga para o pulso (até ~9% maior) não ser cortado pela borda da janela.
-                (n.get_closed_width() * 1.1 + 2.0, n.get_closed_height() * 1.1 + 2.0)
-            };
-            if open {
-                close_at.set(None);
-            } else if big.get() && close_at.get().is_none() {
-                close_at.set(Some(std::time::Instant::now() + Duration::from_millis(450))); // deixa a animação de fechar terminar
+            // A janela fica sempre do tamanho do notch aberto (mudar o tamanho dela no meio da animação
+            // piscava e fazia o notch escorregar). Fechado, ela deixa o mouse passar para o que está embaixo;
+            // quem abre é a posição do mouse, lida aqui, então não precisa de eventos da janela.
+            let clickable = open || n.get_dragging();
+            if clickable != hit.get() {
+                hit.set(clickable);
+                let _ = w.set_cursor_hittest(clickable);
             }
-            let want_big = lw >= n.get_big_width();
-            let now_state = (lw, lh, edge, n.get_edge_pos());
-            if now_state != size_now.get() {
-                size_now.set(now_state);
-                big.set(want_big);
-                if !want_big { close_at.set(None); }
+            let now_state = (edge, n.get_edge_pos());
+            if Some(now_state) != placed.get() {
+                placed.set(Some(now_state));
                 let (sw, sh) = unsafe { (GetSystemMetrics(SM_CXSCREEN) as f64, GetSystemMetrics(windows::Win32::UI::WindowsAndMessaging::SM_CYSCREEN) as f64) };
-                let _ = w.request_inner_size(winit::dpi::LogicalSize::new(lw as f64, lh as f64));
-                let (x, y) = window_pos(edge, n.get_edge_pos() as f64, lw as f64 * scale, lh as f64 * scale, sw, sh);
+                let (bw, bh) = (n.get_big_width() as f64 * scale, n.get_big_height() as f64 * scale);
+                let _ = w.request_inner_size(winit::dpi::LogicalSize::new(n.get_big_width() as f64, n.get_big_height() as f64));
+                let (x, y) = window_pos(edge, n.get_edge_pos() as f64, bw, bh, sw, sh);
                 w.set_outer_position(winit::dpi::PhysicalPosition::new(x as i32, y as i32));
             }
 
@@ -255,8 +247,6 @@ pub fn setup(notch: &Notch) {
     std::mem::forget(slow);
 }
 
-fn n_big_w(n: &Notch) -> f32 { n.get_big_width() }
-fn n_big_h(n: &Notch) -> f32 { n.get_big_height() }
 
 fn set_noactivate(hwnd: HWND, on: bool) {
     unsafe {
