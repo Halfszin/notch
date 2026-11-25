@@ -77,9 +77,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp target/release/orbi.exe Orbi-rust.exe
-          # A etiqueta vem antes, pelo git: criar etiqueta e publicação juntas dava erro 500 no GitHub.
-          git tag -f rust-preview
-          git push -f origin rust-preview
+          # A etiqueta rust-preview é criada fora do CI: o token do CI não pode criar etiquetas em
+          # commits com arquivos de workflow (o GitHub recusa, às vezes como erro 500). Aqui só anexa o .exe.
           for i in 1 2 3; do
             gh release upload rust-preview Orbi-rust.exe --clobber && exit 0
             gh release create rust-preview Orbi-rust.exe --verify-tag --prerelease --title "Orbi em Rust (preview)" \
