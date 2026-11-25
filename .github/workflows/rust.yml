@@ -153,6 +153,7 @@ jobs:
           if (Test-Path ci\erro.log) { Get-Content ci\erro.log; exit 1 }
 
       - name: Instalador
+        timeout-minutes: 10
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
@@ -161,7 +162,9 @@ jobs:
           & $iscc installer.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           # Instala em silêncio e confere que o Orbi foi para a pasta do usuário.
-          Start-Process dist\OrbiRustSetup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          # Espera só o instalador (com -Wait o PowerShell esperaria também o Orbi que ele abre no fim).
+          $setup = Start-Process dist\OrbiRustSetup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -PassThru
+          if (-not $setup.WaitForExit(180000)) { Write-Error "instalador travou"; exit 1 }
           $installed = "$env:LOCALAPPDATA\Programs\Orbi Rust\OrbiRust.exe"
           Start-Sleep 3
           Get-Process OrbiRust -ErrorAction SilentlyContinue | Stop-Process -Force
