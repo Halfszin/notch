@@ -37,7 +37,10 @@ jobs:
             [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
             $bmp.Save("ci\$name.png")
           }
-          $exe = "target\release\orbi.exe"
+          # Roda uma cópia: o atualizador troca o .exe aberto pelo da prévia, e o publicado tem de ser o compilado aqui.
+          New-Item -ItemType Directory run -Force | Out-Null
+          Copy-Item target\release\orbi.exe run\orbi.exe
+          $exe = "run\orbi.exe"
           "tamanho=$([math]::Round((Get-Item $exe).Length / 1MB, 1)) MB" | Out-File ci\resultado.txt
           # Tarefas de exemplo (mesmo arquivo do Orbi em C#): 4 de 5 feitas.
           New-Item -ItemType Directory "$env:APPDATA\Orbi" -Force | Out-Null
@@ -94,6 +97,10 @@ jobs:
           Start-Sleep 1
           Shot "13-configuracoes"
           "vivo=$(-not $p.HasExited)" | Out-File ci\resultado.txt -Append
+          # Atualizador: 20 s depois de abrir compara com o versao.txt da prévia (outro commit) e troca o .exe.
+          for ($i = 0; $i -lt 40 -and -not (Test-Path run\orbi.exe.old); $i++) { Start-Sleep 2 }
+          "atualizou=$(Test-Path run\orbi.exe.old)" | Out-File ci\resultado.txt -Append
+          Shot "14-atualizado"
           if (Test-Path "$env:APPDATA\Orbi\rust-erro.log") { Copy-Item "$env:APPDATA\Orbi\rust-erro.log" ci\erro.log }
           if (Test-Path "$env:APPDATA\Orbi\rust-diag.txt") { Copy-Item "$env:APPDATA\Orbi\rust-diag.txt" ci\diag.txt }
           if (-not $p.HasExited) { Stop-Process $p -Force }
@@ -108,7 +115,9 @@ jobs:
 
       - name: Falhar se fechou
         shell: pwsh
-        run: if (-not (Select-String -Path ci\resultado.txt -Pattern 'vivo=True' -Quiet)) { exit 1 }
+        run: |
+          if (-not (Select-String -Path ci\resultado.txt -Pattern 'vivo=True' -Quiet)) { exit 1 }
+          if (Test-Path ci\erro.log) { Get-Content ci\erro.log; exit 1 }
 
       - name: Publicar a prévia
         shell: bash

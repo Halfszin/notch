@@ -70,7 +70,8 @@ fn check() {
 fn download() -> Result<bool, String> {
     if BUILD == "dev" { return Err("esta cópia foi compilada fora do GitHub.".into()); }
     report("Procurando versão nova…".into(), false);
-    let get = |name: &str| ureq::get(format!("{BASE}{name}")).header("User-Agent", "Orbi").call().map_err(|e| e.to_string());
+    let agent = crate::lyrics::http();
+    let get = |name: &str| agent.get(format!("{BASE}{name}")).header("User-Agent", "Orbi").call().map_err(|e| e.to_string());
     let latest = get("versao.txt")?.body_mut().read_to_string().map_err(|e| e.to_string())?.trim().to_string();
     if latest.len() < 7 || !latest.bytes().all(|b| b.is_ascii_hexdigit()) { return Err("resposta estranha do GitHub.".into()); }
     if latest == BUILD { return Ok(false); }

@@ -39,9 +39,16 @@ pub fn index_at(lines: &[Line], t: f64) -> Option<usize> {
     n.checked_sub(1)
 }
 
+/// Cliente HTTPS com o TLS do Windows (schannel): o ureq tenta Rustls por padrão e ele não está compilado.
+#[cfg(windows)]
+pub fn http() -> ureq::Agent {
+    use ureq::tls::{TlsConfig, TlsProvider};
+    ureq::Agent::config_builder().tls_config(TlsConfig::builder().provider(TlsProvider::NativeTls).build()).build().new_agent()
+}
+
 #[cfg(windows)]
 pub fn fetch(artist: &str, title: &str, duration: f64) -> Option<Vec<Line>> {
-    let mut req = ureq::get("https://lrclib.net/api/get")
+    let mut req = http().get("https://lrclib.net/api/get")
         .query("artist_name", artist)
         .query("track_name", title)
         .header("User-Agent", "Orbi (github.com/Halfszin/notch)");
