@@ -50,9 +50,9 @@ public partial class AiPage : UserControl
     void ShowWelcome()
     {
         Messages.Children.Clear();
-        Bubble(Config.Current.ApiKey != null ? "Pergunte qualquer coisa. Eu busco na web quando precisar e respondo curtinho aqui."
-            : ClaudeCli.Find() != null ? "Pergunte qualquer coisa. Vou responder pela sua assinatura do Claude (Claude Code), com busca na web."
-            : "Para perguntar, instale o Claude Code (usa sua assinatura do Claude) ou coloque uma chave da API em Configurações → Inteligência artificial.", false, muted: true);
+        Bubble(ClaudeCli.Find() != null ? "Pergunte qualquer coisa. Respondo pela sua assinatura do Claude (Claude Code), sem custo extra, com busca na web."
+            : Config.Current.ApiKey != null ? "Pergunte qualquer coisa. (Sem o Claude Code instalado, estou usando a sua chave da API, que é cobrada por uso.)"
+            : "Para perguntar sem pagar nada a mais, instale o Claude Code e entre com a sua conta do Claude (Pro ou Max).", false, muted: true);
     }
 
     void NewChat_Click(object s, MouseButtonEventArgs e)
@@ -68,14 +68,15 @@ public partial class AiPage : UserControl
     {
         if (e.Key != Key.Enter || string.IsNullOrWhiteSpace(AskInput.Text) || _pending != null) return;
         string question = AskInput.Text.Trim();
-        string? key = Config.Current.ApiKey;
-        string? cli = key == null ? ClaudeCli.Find() : null;
+        // A assinatura (Claude Code) vem primeiro: a chave da API é cobrada por uso e fica só de reserva.
+        string? cli = ClaudeCli.Find();
+        string? key = cli == null ? Config.Current.ApiKey : null;
         if (_history.Count == 0) Messages.Children.Clear();
         AskInput.Clear();
         Bubble(question, true);
         if (key == null && cli == null)
         {
-            Bubble("Instale o Claude Code ou coloque uma chave da API em Configurações → Inteligência artificial.", false, muted: true);
+            Bubble("Instale o Claude Code e entre com a sua conta do Claude para usar o chat pela assinatura.", false, muted: true);
             return;
         }
         var waiting = Bubble("Pensando…", false, muted: true);
@@ -86,9 +87,9 @@ public partial class AiPage : UserControl
             // Só as últimas 3 perguntas e respostas vão junto: o chat é para coisas rápidas.
             var history = _history.TakeLast(6).ToList();
             // Com chave: API do Claude. Sem chave: a sua assinatura, pelo Claude Code instalado.
-            var reply = key != null
-                ? await AiChat.Ask(key, history, question, _pending.Token)
-                : new AiChat.Reply(await ClaudeCli.Ask(cli!, ClaudeCli.Prompt(history, question), AiChat.Instructions, _pending.Token), 0, 0);
+            var reply = cli != null
+                ? new AiChat.Reply(await ClaudeCli.Ask(cli, ClaudeCli.Prompt(history, question), AiChat.Instructions, _pending.Token), 0, 0)
+                : await AiChat.Ask(key!, history, question, _pending.Token);
             Messages.Children.Remove(waiting);
             Bubble(reply.Text, false);
             _history.Add((true, question));

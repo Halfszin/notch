@@ -174,8 +174,8 @@ public partial class SettingsWindow : Window
     }
 
     void ShowKeyStatus() => KeyStatus.Text = Config.Current.ApiKey is { } k
-        ? $"Chave salva (…{k[^4..]}), guardada cifrada pela sua conta do Windows. Para trocar, cole outra; para apagar, salve vazio."
-        : "Usada pelo chat da aba IA. Fica guardada cifrada pela sua conta do Windows.";
+        ? $"Chave salva (…{k[^4..]}), só usada se o Claude Code não estiver instalado (é cobrada por uso). Para apagar, salve vazio."
+        : "Opcional e cobrada por uso. Com o Claude Code instalado, o chat usa a sua assinatura e esta chave nem é usada.";
 
     void Notif_Click(object s, RoutedEventArgs e)
     {
