@@ -112,6 +112,59 @@ pub fn peak_meter() -> Option<windows::Win32::Media::Audio::Endpoints::IAudioMet
     }
 }
 
+/// Captura o som que está saindo do PC (loopback da saída padrão) e chama `on` com amostras mono
+/// a cada ~15 ms (lista vazia quando nada tocou). Volta quando a saída padrão muda; erro se não der.
+pub fn loopback(mut on: impl FnMut(&[f32], f32)) -> windows::core::Result<()> {
+    use windows::Win32::Media::Audio::{
+        eConsole, eRender, IAudioCaptureClient, IAudioClient, IMMDeviceEnumerator, MMDeviceEnumerator, AUDCLNT_BUFFERFLAGS_SILENT,
+        AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_LOOPBACK,
+    };
+    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoTaskMemFree, CLSCTX_ALL, COINIT_MULTITHREADED};
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+        let device_id = |en: &IMMDeviceEnumerator| -> Option<String> {
+            let p = en.GetDefaultAudioEndpoint(eRender, eConsole).ok()?.GetId().ok()?;
+            let s = p.to_string().ok();
+            CoTaskMemFree(Some(p.0 as _));
+            s
+        };
+        let id = device_id(&en);
+        let client: IAudioClient = en.GetDefaultAudioEndpoint(eRender, eConsole)?.Activate(CLSCTX_ALL, None)?;
+        let fmt = client.GetMixFormat()?;
+        let (channels, rate, bits) = ((*fmt).nChannels as usize, (*fmt).nSamplesPerSec as f32, (*fmt).wBitsPerSample);
+        let init = client.Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_LOOPBACK, 2_000_000, 0, fmt, None);
+        CoTaskMemFree(Some(fmt as _));
+        init?;
+        // O formato do mixer compartilhado é float de 32 bits; outro formato fica com o medidor de volume.
+        if bits != 32 || channels == 0 { return Err(windows::Win32::Foundation::E_FAIL.into()); }
+        let cap: IAudioCaptureClient = client.GetService()?;
+        client.Start()?;
+        let mut mono = Vec::new();
+        let mut checked = std::time::Instant::now();
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(15));
+            mono.clear();
+            while cap.GetNextPacketSize()? > 0 {
+                let (mut data, mut frames, mut flags) = (std::ptr::null_mut(), 0u32, 0u32);
+                cap.GetBuffer(&mut data, &mut frames, &mut flags, None, None)?;
+                if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 || data.is_null() {
+                    mono.extend(std::iter::repeat_n(0.0, frames as usize));
+                } else {
+                    let all = std::slice::from_raw_parts(data as *const f32, frames as usize * channels);
+                    mono.extend(all.chunks_exact(channels).map(|f| f.iter().sum::<f32>() / channels as f32));
+                }
+                cap.ReleaseBuffer(frames)?;
+            }
+            on(&mono, rate);
+            if checked.elapsed().as_secs() >= 3 {
+                checked = std::time::Instant::now();
+                if device_id(&en) != id { let _ = client.Stop(); return Ok(()); } // trocou fone/caixa: recomeça
+            }
+        }
+    }
+}
+
 /// Abre um app, arquivo, pasta ou site como o Explorer abriria.
 pub fn open(target: &str) {
     unsafe { ShellExecuteW(Some(HWND::default()), &HSTRING::from("open"), &HSTRING::from(target), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL) };

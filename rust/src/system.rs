@@ -99,7 +99,8 @@ pub fn setup(notch: &Notch) {
             } else if n.get_toasting() {
                 (n.get_toast_width(), n.get_toast_height())
             } else {
-                (n.get_closed_width(), n.get_closed_height())
+                // Folga para o pulso do grave não ser cortado pela borda da janela.
+                (n.get_closed_width() + 8.0, n.get_closed_height() + 3.0)
             };
             if open {
                 close_at.set(None);
@@ -132,29 +133,52 @@ pub fn setup(notch: &Notch) {
     });
     std::mem::forget(fast); // o timer vive enquanto o app viver
 
-    // Volume do som agora: as barrinhas do notch fechado e o avatar pulam com a música.
-    static PEAK: AtomicU32 = AtomicU32::new(0);
-    std::thread::spawn(|| {
-        let mut meter = None;
-        for i in 0u64.. {
-            if i % 100 == 0 { meter = crate::winapi::peak_meter(); } // a cada 3 s: pega a saída de som atual
-            let v = meter.as_ref().and_then(|m| unsafe { m.GetPeakValue() }.ok()).unwrap_or(0.0);
-            PEAK.store(v.to_bits(), Relaxed);
-            std::thread::sleep(Duration::from_millis(30));
+    // Visualizador (como o Wallpaper Engine): 4 faixas do som que está saindo; barrinhas do notch fechado,
+    // pulso do notch e do avatar no grave. Sem captura (formato estranho, sem saída): medidor de volume.
+    static BANDS: [AtomicU32; 4] = [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)];
+    std::thread::spawn(|| loop {
+        let mut ring: std::collections::VecDeque<f32> = std::collections::VecDeque::with_capacity(crate::spectrum::N * 2);
+        let mut norm = crate::spectrum::Normalizer::new();
+        let mut quiet = std::time::Instant::now();
+        let ok = crate::winapi::loopback(|samples, rate| {
+            if samples.is_empty() {
+                // Nada tocando: o Windows não manda pacotes; completa com silêncio para as barras caírem.
+                if quiet.elapsed().as_millis() < 100 { return; }
+                ring.extend(std::iter::repeat_n(0.0, (rate * 0.015) as usize));
+            } else {
+                quiet = std::time::Instant::now();
+                ring.extend(samples);
+            }
+            while ring.len() > crate::spectrum::N { ring.pop_front(); }
+            if ring.len() == crate::spectrum::N {
+                let b = norm.apply(crate::spectrum::bands(ring.make_contiguous(), rate));
+                for (slot, v) in BANDS.iter().zip(b) { slot.store(v.to_bits(), Relaxed); }
+            }
+        });
+        if ok.is_err() {
+            let meter = crate::winapi::peak_meter();
+            for _ in 0..100 {
+                let v = meter.as_ref().and_then(|m| unsafe { m.GetPeakValue() }.ok()).unwrap_or(0.0);
+                for slot in &BANDS { slot.store((v * 1.4).min(1.0).to_bits(), Relaxed); }
+                std::thread::sleep(Duration::from_millis(30));
+            }
         }
     });
     let weak = notch.as_weak();
-    let level = std::rc::Rc::new(std::cell::Cell::new(0f32));
+    let shown = std::rc::Rc::new(std::cell::Cell::new([0f32; 4]));
     let beat = Timer::default();
     beat.start(TimerMode::Repeated, Duration::from_millis(30), move || {
         let Some(n) = weak.upgrade() else { return };
-        let target = (f32::from_bits(PEAK.load(Relaxed)) * 1.4).min(1.0);
-        let now = level.get();
-        // Sobe rápido e desce suave (como no Orbi em C#).
-        let next = if target > now { now + (target - now) * 0.6 } else { now * 0.85 };
-        level.set(next);
-        let shown = if n.get_playing() { next } else { 0.0 };
-        if (shown - n.get_level()).abs() > 0.005 { n.set_level(shown); }
+        if !n.get_has_media() { return; }
+        let mut cur = shown.get();
+        for (c, slot) in cur.iter_mut().zip(&BANDS) {
+            let target = if n.get_playing() { f32::from_bits(slot.load(Relaxed)) } else { 0.0 };
+            // Sobe rápido e desce suave, como os visualizadores do Wallpaper Engine.
+            *c = if target > *c { *c + (target - *c) * 0.7 } else { *c * 0.82 };
+        }
+        shown.set(cur);
+        n.set_bands(slint::ModelRc::new(slint::VecModel::from(cur.to_vec())));
+        n.set_level(cur[0]);
     });
     std::mem::forget(beat);
 

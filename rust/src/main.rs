@@ -6,6 +6,7 @@ slint::include_modules!();
 mod color;
 mod lyrics;
 mod pages;
+mod spectrum;
 mod store;
 mod taskparse;
 #[cfg(windows)]

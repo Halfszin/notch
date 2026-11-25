@@ -22,18 +22,49 @@ pub struct Prefs {
     pub gradient: bool,
     pub auto_update: bool,
     pub compact: bool,
+    /// Páginas na ordem das bolinhas (id = posição na lista PAGES) e se aparecem.
+    pub pages: Vec<PageCfg>,
 }
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+pub struct PageCfg {
+    pub id: usize,
+    pub visible: bool,
+}
+
+/// Nomes das páginas, na ordem dos ids da interface (titles do notch.slint).
+const PAGES: [&str; 8] = ["Tocando", "Tarefas", "Foco", "Calendário", "Notas", "Copiados", "Sistema", "Atalhos"];
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { battery_alerts: true, audio_alerts: true, reminders: true, lyrics: true, gradient: true, auto_update: true, compact: false }
+        Prefs {
+            battery_alerts: true, audio_alerts: true, reminders: true, lyrics: true, gradient: true, auto_update: true, compact: false,
+            pages: (0..PAGES.len()).map(|id| PageCfg { id, visible: true }).collect(),
+        }
     }
+}
+
+/// Arquivo editado à mão ou de versão antiga: tira ids repetidos/inválidos, põe os que faltam no fim e
+/// deixa a página da música sempre visível (o notch nunca fica sem página).
+pub fn fix_pages(pages: &[PageCfg]) -> Vec<PageCfg> {
+    let mut out: Vec<PageCfg> = Vec::new();
+    for p in pages {
+        if p.id < PAGES.len() && !out.iter().any(|o| o.id == p.id) { out.push(PageCfg { id: p.id, visible: p.visible || p.id == 0 }); }
+    }
+    for id in 0..PAGES.len() {
+        if !out.iter().any(|o| o.id == id) { out.push(PageCfg { id, visible: true }); }
+    }
+    out
 }
 
 const FILE: &str = "rust-config.json";
 
 thread_local! {
-    static PREFS: RefCell<Prefs> = RefCell::new(crate::store::load(FILE));
+    static PREFS: RefCell<Prefs> = RefCell::new({
+        let mut p: Prefs = crate::store::load(FILE);
+        p.pages = fix_pages(&p.pages);
+        p
+    });
     static NOTCH: RefCell<Option<Weak<Notch>>> = const { RefCell::new(None) };
     static WINDOW: RefCell<Option<Settings>> = const { RefCell::new(None) };
     static STATUS: RefCell<(String, bool)> = RefCell::new((String::new(), false));
@@ -48,6 +79,7 @@ pub fn setup(notch: &Notch) {
     let prefs = get();
     notch.set_gradient_enabled(prefs.gradient);
     notch.set_compact(prefs.compact);
+    apply_pages(notch, &prefs.pages);
     updater::AUTO.store(prefs.auto_update, Ordering::Relaxed);
     NOTCH.with(|n| *n.borrow_mut() = Some(notch.as_weak()));
     notch.on_open_settings(show);
@@ -120,6 +152,7 @@ pub fn show() {
                     gradient: w.get_gradient(),
                     auto_update: w.get_auto_update(),
                     compact: w.get_compact(),
+                    pages: get().pages,
                 };
                 crate::store::save(FILE, &prefs);
                 updater::AUTO.store(prefs.auto_update, Ordering::Relaxed);
@@ -134,6 +167,15 @@ pub fn show() {
                     w.set_start_with_windows(autostart());
                 }
             });
+            let weak = w.as_weak();
+            w.on_page_toggle(move |i| edit_pages(&weak, |p| {
+                if let Some(x) = p.get_mut(i as usize) { if x.id != 0 { x.visible = !x.visible; } }
+            }));
+            let weak = w.as_weak();
+            w.on_page_move(move |i, dir| edit_pages(&weak, |p| {
+                let (a, b) = (i as usize, (i + dir) as usize);
+                if a < p.len() && b < p.len() { p.swap(a, b); }
+            }));
             w.on_check_update(updater::check_now);
             w.on_restart_update(updater::restart);
             w.on_quit(|| { let _ = slint::quit_event_loop(); });
@@ -153,6 +195,7 @@ pub fn show() {
         w.set_gradient(p.gradient);
         w.set_auto_update(p.auto_update);
         w.set_compact(p.compact);
+        set_page_list(w, &p.pages);
         w.set_start_with_windows(autostart());
         STATUS.with(|s| {
             let s = s.borrow();
@@ -169,6 +212,48 @@ pub fn show() {
             }
         });
     });
+}
+
+// ---------- páginas do notch ----------
+
+fn set_page_list(w: &Settings, pages: &[PageCfg]) {
+    let list: Vec<crate::PageEntry> = pages.iter()
+        .map(|p| crate::PageEntry { name: PAGES[p.id].into(), visible: p.visible, fixed: p.id == 0 })
+        .collect();
+    w.set_page_list(slint::ModelRc::new(slint::VecModel::from(list)));
+}
+
+/// Manda a ordem para o notch, ficando na mesma página se ela ainda aparece.
+fn apply_pages(n: &Notch, pages: &[PageCfg]) {
+    let current = n.get_page();
+    let order: Vec<i32> = pages.iter().filter(|p| p.visible).map(|p| p.id as i32).collect();
+    n.set_pos(order.iter().position(|&id| id == current).unwrap_or(0) as i32);
+    n.set_order(slint::ModelRc::new(slint::VecModel::from(order)));
+}
+
+fn edit_pages(weak: &Weak<Settings>, change: impl FnOnce(&mut Vec<PageCfg>)) {
+    let Some(w) = weak.upgrade() else { return };
+    let mut prefs = get();
+    change(&mut prefs.pages);
+    crate::store::save(FILE, &prefs);
+    set_page_list(&w, &prefs.pages);
+    if let Some(n) = NOTCH.with(|n| n.borrow().as_ref().and_then(|w| w.upgrade())) { apply_pages(&n, &prefs.pages); }
+    PREFS.with(|p| *p.borrow_mut() = prefs);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fix_pages_repara_lista() {
+        let bad = vec![PageCfg { id: 3, visible: false }, PageCfg { id: 3, visible: true }, PageCfg { id: 0, visible: false }, PageCfg { id: 99, visible: true }];
+        let fixed = fix_pages(&bad);
+        assert_eq!(fixed.len(), 8);
+        assert_eq!(fixed[0], PageCfg { id: 3, visible: false });
+        assert_eq!(fixed[1], PageCfg { id: 0, visible: true }); // música sempre visível
+        assert_eq!(fixed.iter().map(|p| p.id).collect::<std::collections::BTreeSet<_>>().len(), 8);
+    }
 }
 
 // ---------- iniciar com o Windows (HKCU\...\Run, valor próprio para não mexer no Orbi em C#) ----------

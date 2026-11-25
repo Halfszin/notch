@@ -26,10 +26,11 @@ pub fn start(notch: &Notch) {
         let mut last_key = String::new();
         // Letra da música atual (buscada em outra thread quando a música muda).
         let lyrics: Arc<Mutex<(String, Option<Vec<crate::lyrics::Line>>)>> = Arc::new(Mutex::new((String::new(), None)));
+        let mut pending: Option<Command> = None;
         loop {
             let session = current(&manager);
             if let Some(s) = &session {
-                while let Ok(cmd) = rx.try_recv() {
+                while let Some(cmd) = pending.take().or_else(|| rx.try_recv().ok()) {
                     let _ = match cmd {
                         Command::PlayPause => s.TryTogglePlayPauseAsync().and_then(|o| o.join()),
                         Command::Next => s.TrySkipNextAsync().and_then(|o| o.join()),
@@ -67,6 +68,7 @@ pub fn start(notch: &Notch) {
                 let Some(n) = weak.upgrade() else { return };
                 match info {
                     Some(i) => {
+                        n.set_has_media(true);
                         n.set_song(i.title.into());
                         n.set_artist(i.artist.into());
                         n.set_playing(i.playing);
@@ -75,6 +77,7 @@ pub fn start(notch: &Notch) {
                         n.set_remaining(i.remaining.into());
                     }
                     None => {
+                        n.set_has_media(false);
                         n.set_song("Nada tocando".into());
                         n.set_artist("".into());
                         n.set_playing(false);
@@ -99,7 +102,8 @@ pub fn start(notch: &Notch) {
                     }
                 }
             });
-            std::thread::sleep(Duration::from_millis(700));
+            // A cada 250 ms (play/pausa aparecem logo); um botão do notch acorda na hora.
+            pending = rx.recv_timeout(Duration::from_millis(250)).ok();
         }
     });
 }

@@ -121,7 +121,8 @@ jobs:
           # Notch Compacto (configuração salva no rust-config.json): abre e passa pelas páginas pela seta.
           Get-Process orbi -ErrorAction SilentlyContinue | Stop-Process -Force
           Start-Sleep 1
-          '{"compact":true}' | Set-Content "$env:APPDATA\Orbi\rust-config.json" -Encoding ascii
+          # Também testa a ordem das páginas: Calendário na 2ª bolinha e Copiados escondido (7 páginas).
+          '{"compact":true,"pages":[{"id":0,"visible":true},{"id":3,"visible":true},{"id":1,"visible":true},{"id":2,"visible":true},{"id":4,"visible":true},{"id":5,"visible":false},{"id":6,"visible":true},{"id":7,"visible":true}]}' | Set-Content "$env:APPDATA\Orbi\rust-config.json" -Encoding ascii
           New-Item -ItemType Directory run2 -Force | Out-Null
           Copy-Item target\release\orbi.exe run2\orbi.exe
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 900, 700
@@ -130,7 +131,7 @@ jobs:
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($w / 2)), 10
           Start-Sleep 2
           Shot "c0-compacto"
-          foreach ($i in 1..7) { Click (($w + 544) / 2 - 22) 116; Shot "c$i-compacto" }
+          foreach ($i in 1..6) { Click (($w + 544) / 2 - 22) 116; Shot "c$i-compacto" }
           "compacto_vivo=$(-not $p3.HasExited)" | Out-File ci\resultado.txt -Append
           if (-not $p3.HasExited) { Stop-Process $p3 -Force }
           Shot "14-atualizado"
