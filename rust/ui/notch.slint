@@ -256,8 +256,8 @@ export component Notch inherits Window {
         VerticalLayout {
             opacity: root.open ? 1 : 0;
             animate opacity { duration: 220ms; delay: 90ms; }
-            padding-left: 22px;
-            padding-right: 22px;
+            padding-left: 46px; // espaço para as setas laterais
+            padding-right: 46px;
             padding-top: 10px;
             padding-bottom: 8px;
             spacing: 6px;
@@ -286,189 +286,192 @@ export component Notch inherits Window {
                 }
             }
 
-            // ---- página: música ----
-            if root.page == 0 : HorizontalLayout {
-                spacing: 16px;
-                if !(root.show-lyrics && root.has-lyrics) : Avatar { width: 140px; look-x: root.look-x; look-y: root.look-y; }
-                VerticalLayout {
-                    alignment: center;
-                    spacing: 10px;
-                    width: root.show-lyrics && root.has-lyrics ? 270px : 400px;
-                    HorizontalLayout {
-                        spacing: 12px;
-                        Rectangle {
-                            width: 64px;
-                            height: 64px;
-                            border-radius: 12px;
-                            clip: true;
-                            background: #222226;
-                            if root.has-cover : Image { source: root.cover; width: parent.width; height: parent.height; image-fit: ImageFit.cover; }
-                            if !root.has-cover : Text { text: "\u{E8D6}"; font-family: "Segoe MDL2 Assets"; font-size: 22px; color: #777777; horizontal-alignment: center; vertical-alignment: center; }
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            Text { text: root.song; color: white; font-size: 16px; font-weight: 700; overflow: elide; }
-                            Text { text: root.artist; color: #FFFFFFAA; font-size: 13px; overflow: elide; }
-                        }
-                    }
-                    HorizontalLayout {
-                        spacing: 10px;
-                        Text { text: root.elapsed; color: #FFFFFFCC; font-size: 11px; width: 36px; vertical-alignment: center; }
-                        Rectangle {
-                            height: 4px;
-                            y: 7px;
-                            border-radius: 2px;
-                            background: #FFFFFF33;
-                            Rectangle { x: 0; width: parent.width * clamp(root.progress, 0, 1); border-radius: 2px; background: white; }
-                        }
-                        Text { text: root.remaining; color: #FFFFFFCC; font-size: 11px; width: 40px; horizontal-alignment: right; vertical-alignment: center; }
-                    }
-                    HorizontalLayout {
-                        alignment: center;
-                        spacing: 6px;
-                        if root.has-lyrics : IconButton {
-                            glyph: "\u{E8BD}";
-                            size: 14px;
-                            tint: root.show-lyrics ? white : #FFFFFF88;
-                            clicked => { root.show-lyrics = !root.show-lyrics; }
-                        }
-                        IconButton { glyph: "\u{E892}"; clicked => { root.previous(); } }
-                        IconButton { glyph: root.playing ? "\u{E769}" : "\u{E768}"; size: 19px; tint: white; clicked => { root.play-pause(); } }
-                        IconButton { glyph: "\u{E893}"; clicked => { root.next(); } }
-                    }
-                }
-                // Letra: a linha cantada acesa, as outras apagadas.
-                if root.show-lyrics && root.has-lyrics : HorizontalLayout {
+            Rectangle {
+                vertical-stretch: 1;
+                // ---- página: música ----
+                if root.page == 0 : HorizontalLayout {
                     spacing: 16px;
-                    Rectangle { width: 1px; background: #FFFFFF22; }
+                    if !(root.show-lyrics && root.has-lyrics) : Avatar { width: 140px; look-x: root.look-x; look-y: root.look-y; }
                     VerticalLayout {
                         alignment: center;
-                        spacing: 8px;
-                        Text { text: root.lyric-prev; color: #FFFFFF55; font-size: 13px; font-weight: 600; overflow: elide; }
-                        Text { text: root.lyric-now; color: white; font-size: 15px; font-weight: 700; wrap: word-wrap; }
-                        Text { text: root.lyric-next; color: #FFFFFF77; font-size: 13px; font-weight: 600; overflow: elide; }
-                        Text { text: root.lyric-next2; color: #FFFFFF44; font-size: 13px; font-weight: 600; overflow: elide; }
-                    }
-                }
-            }
-
-            // ---- página: tarefas (como o "4/5 Task Done Today" do Nusa) ----
-            if root.page == 1 : HorizontalLayout {
-                spacing: 18px;
-                VerticalLayout {
-                    width: 210px;
-                    alignment: center;
-                    spacing: 4px;
-                    Text { text: root.tasks-done + "/" + root.tasks-total; color: white; font-size: 42px; font-weight: 800; }
-                    Text { text: "feitas hoje"; color: #8E8E93; font-size: 13px; }
-                    Rectangle { height: 8px; }
-                    if !root.adding : HorizontalLayout {
-                        spacing: 8px;
-                        alignment: start;
-                        Pill { glyph: "\u{E710}"; label: "Adicionar"; clicked => { root.adding = true; root.want-keyboard(); input.focus(); } }
-                        Pill { glyph: "\u{E74D}"; label: "Limpar"; clicked => { root.clear-done(); } }
-                    }
-                    input := LineEdit {
-                        visible: root.adding;
-                        height: root.adding ? 32px : 0px;
-                        placeholder-text: "Nova tarefa… (Enter salva)";
-                        accepted(text) => {
-                            if (text != "") { root.add-task(text); }
-                            self.text = "";
-                            root.adding = false;
-                        }
-                        key-pressed(e) => {
-                            if (e.text == Key.Escape) { self.text = ""; root.adding = false; return accept; }
-                            reject
-                        }
-                    }
-                }
-                Flickable {
-                    content-height: list.preferred-height;
-                    list := VerticalLayout {
-                        spacing: 6px;
-                        alignment: start;
-                        if root.tasks.length == 0 : Text { text: "Nenhuma tarefa. Clique em Adicionar."; color: #8E8E93; font-size: 13px; }
-                        for task[i] in root.tasks : Rectangle {
-                            height: 36px;
-                            border-radius: 10px;
-                            background: task.done ? #17331F : (row-ta.has-hover ? #26262B : #1C1C20);
-                            HorizontalLayout {
-                                padding-left: 10px;
-                                padding-right: 10px;
-                                spacing: 10px;
-                                Rectangle {
-                                    width: 20px;
-                                    height: 20px;
-                                    y: 8px;
-                                    border-radius: 10px;
-                                    background: task.done ? #30D158 : transparent;
-                                    border-width: task.done ? 0px : 1.5px;
-                                    border-color: #8E8E93;
-                                    if task.done : Text { text: "\u{E73E}"; font-family: "Segoe MDL2 Assets"; font-size: 10px; color: black; horizontal-alignment: center; vertical-alignment: center; }
-                                }
-                                Text { text: task.title; color: task.done ? #FFFFFF77 : white; font-size: 13px; vertical-alignment: center; overflow: elide; }
-                                if task.due != "" : Text { text: task.due; color: #FF9F0A; font-size: 11px; vertical-alignment: center; }
+                        spacing: 10px;
+                        width: root.show-lyrics && root.has-lyrics ? 260px : 360px;
+                        HorizontalLayout {
+                            spacing: 12px;
+                            Rectangle {
+                                width: 64px;
+                                height: 64px;
+                                border-radius: 12px;
+                                clip: true;
+                                background: #222226;
+                                if root.has-cover : Image { source: root.cover; width: parent.width; height: parent.height; image-fit: ImageFit.cover; }
+                                if !root.has-cover : Text { text: "\u{E8D6}"; font-family: "Segoe MDL2 Assets"; font-size: 22px; color: #777777; horizontal-alignment: center; vertical-alignment: center; }
                             }
-                            row-ta := TouchArea { clicked => { root.toggle-task(i); } mouse-cursor: pointer; }
+                            VerticalLayout {
+                                alignment: center;
+                                Text { text: root.song; color: white; font-size: 16px; font-weight: 700; overflow: elide; }
+                                Text { text: root.artist; color: #FFFFFFAA; font-size: 13px; overflow: elide; }
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 10px;
+                            Text { text: root.elapsed; color: #FFFFFFCC; font-size: 11px; width: 36px; vertical-alignment: center; }
+                            Rectangle {
+                                height: 4px;
+                                y: 7px;
+                                border-radius: 2px;
+                                background: #FFFFFF33;
+                                Rectangle { x: 0; width: parent.width * clamp(root.progress, 0, 1); border-radius: 2px; background: white; }
+                            }
+                            Text { text: root.remaining; color: #FFFFFFCC; font-size: 11px; width: 40px; horizontal-alignment: right; vertical-alignment: center; }
+                        }
+                        HorizontalLayout {
+                            alignment: center;
+                            spacing: 6px;
+                            if root.has-lyrics : IconButton {
+                                glyph: "\u{E8BD}";
+                                size: 14px;
+                                tint: root.show-lyrics ? white : #FFFFFF88;
+                                clicked => { root.show-lyrics = !root.show-lyrics; }
+                            }
+                            IconButton { glyph: "\u{E892}"; clicked => { root.previous(); } }
+                            IconButton { glyph: root.playing ? "\u{E769}" : "\u{E768}"; size: 19px; tint: white; clicked => { root.play-pause(); } }
+                            IconButton { glyph: "\u{E893}"; clicked => { root.next(); } }
+                        }
+                    }
+                    // Letra: a linha cantada acesa, as outras apagadas.
+                    if root.show-lyrics && root.has-lyrics : HorizontalLayout {
+                        spacing: 16px;
+                        Rectangle { width: 1px; background: #FFFFFF22; }
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 8px;
+                            Text { text: root.lyric-prev; color: #FFFFFF55; font-size: 13px; font-weight: 600; overflow: elide; }
+                            Text { text: root.lyric-now; color: white; font-size: 15px; font-weight: 700; wrap: word-wrap; }
+                            Text { text: root.lyric-next; color: #FFFFFF77; font-size: 13px; font-weight: 600; overflow: elide; }
+                            Text { text: root.lyric-next2; color: #FFFFFF44; font-size: 13px; font-weight: 600; overflow: elide; }
                         }
                     }
                 }
-            }
 
-            // ---- página: foco ----
-            if root.page == 2 : VerticalLayout {
-                alignment: center;
-                spacing: 10px;
-                Text { text: root.focus-text; color: root.focus-running ? #FF9F0A : white; font-size: 56px; font-weight: 300; horizontal-alignment: center; }
-                HorizontalLayout {
-                    alignment: center;
-                    spacing: 8px;
-                    Pill { primary: true; glyph: root.focus-running ? "\u{E769}" : "\u{E768}"; label: root.focus-running ? "Pausar" : "Iniciar"; clicked => { root.focus-toggle(); } }
-                    Pill { glyph: "\u{E72C}"; label: "Zerar"; clicked => { root.focus-reset(); } }
-                }
-                HorizontalLayout {
-                    alignment: center;
-                    spacing: 6px;
-                    for m in [5, 15, 25, 50] : Rectangle {
-                        width: 44px;
-                        height: 24px;
-                        border-radius: 12px;
-                        background: root.focus-minutes == m ? #2C2C31 : transparent;
-                        Text { text: m + "m"; color: root.focus-minutes == m ? white : #8E8E93; font-size: 12px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
-                        TouchArea { clicked => { root.focus-preset(m); } mouse-cursor: pointer; }
+                // ---- página: tarefas (como o "4/5 Task Done Today" do Nusa) ----
+                if root.page == 1 : HorizontalLayout {
+                    spacing: 18px;
+                    VerticalLayout {
+                        width: 210px;
+                        alignment: center;
+                        spacing: 4px;
+                        Text { text: root.tasks-done + "/" + root.tasks-total; color: white; font-size: 42px; font-weight: 800; }
+                        Text { text: "feitas hoje"; color: #8E8E93; font-size: 13px; }
+                        Rectangle { height: 8px; }
+                        if !root.adding : HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            Pill { glyph: "\u{E710}"; label: "Adicionar"; clicked => { root.adding = true; root.want-keyboard(); input.focus(); } }
+                            Pill { glyph: "\u{E74D}"; label: "Limpar"; clicked => { root.clear-done(); } }
+                        }
+                        input := LineEdit {
+                            visible: root.adding;
+                            height: root.adding ? 32px : 0px;
+                            placeholder-text: "Nova tarefa… (Enter salva)";
+                            accepted(text) => {
+                                if (text != "") { root.add-task(text); }
+                                self.text = "";
+                                root.adding = false;
+                            }
+                            key-pressed(e) => {
+                                if (e.text == Key.Escape) { self.text = ""; root.adding = false; return accept; }
+                                reject
+                            }
+                        }
+                    }
+                    Flickable {
+                        content-height: list.preferred-height;
+                        list := VerticalLayout {
+                            spacing: 6px;
+                            alignment: start;
+                            if root.tasks.length == 0 : Text { text: "Nenhuma tarefa. Clique em Adicionar."; color: #8E8E93; font-size: 13px; }
+                            for task[i] in root.tasks : Rectangle {
+                                height: 36px;
+                                border-radius: 10px;
+                                background: task.done ? #17331F : (row-ta.has-hover ? #26262B : #1C1C20);
+                                HorizontalLayout {
+                                    padding-left: 10px;
+                                    padding-right: 10px;
+                                    spacing: 10px;
+                                    Rectangle {
+                                        width: 20px;
+                                        height: 20px;
+                                        y: 8px;
+                                        border-radius: 10px;
+                                        background: task.done ? #30D158 : transparent;
+                                        border-width: task.done ? 0px : 1.5px;
+                                        border-color: #8E8E93;
+                                        if task.done : Text { text: "\u{E73E}"; font-family: "Segoe MDL2 Assets"; font-size: 10px; color: black; horizontal-alignment: center; vertical-alignment: center; }
+                                    }
+                                    Text { text: task.title; color: task.done ? #FFFFFF77 : white; font-size: 13px; vertical-alignment: center; overflow: elide; }
+                                    if task.due != "" : Text { text: task.due; color: #FF9F0A; font-size: 11px; vertical-alignment: center; }
+                                }
+                                row-ta := TouchArea { clicked => { root.toggle-task(i); } mouse-cursor: pointer; }
+                            }
+                        }
                     }
                 }
-            }
 
-            // ---- página: água ----
-            if root.page == 3 : HorizontalLayout {
-                spacing: 24px;
-                VerticalLayout {
-                    width: 210px;
-                    alignment: center;
-                    spacing: 4px;
-                    Text { text: root.water + "/" + root.water-goal; color: white; font-size: 42px; font-weight: 800; }
-                    Text { text: "copos de água hoje"; color: #8E8E93; font-size: 13px; }
-                    Rectangle { height: 8px; }
-                    HorizontalLayout {
-                        spacing: 8px;
-                        alignment: start;
-                        Pill { primary: true; glyph: "\u{E710}"; label: "1 copo"; clicked => { root.water-add(); } }
-                        Pill { glyph: "\u{E738}"; label: "Desfazer"; clicked => { root.water-remove(); } }
-                    }
-                }
-                HorizontalLayout {
+                // ---- página: foco ----
+                if root.page == 2 : VerticalLayout {
                     alignment: center;
                     spacing: 10px;
-                    for g[i] in root.water-goal : Rectangle {
-                        width: 24px;
-                        height: 40px;
-                        y: 40px;
-                        border-radius: 6px;
-                        border-width: 1.5px;
-                        border-color: #0A84FF;
-                        background: i < root.water ? #0A84FF : transparent;
+                    Text { text: root.focus-text; color: root.focus-running ? #FF9F0A : white; font-size: 56px; font-weight: 300; horizontal-alignment: center; }
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 8px;
+                        Pill { primary: true; glyph: root.focus-running ? "\u{E769}" : "\u{E768}"; label: root.focus-running ? "Pausar" : "Iniciar"; clicked => { root.focus-toggle(); } }
+                        Pill { glyph: "\u{E72C}"; label: "Zerar"; clicked => { root.focus-reset(); } }
+                    }
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 6px;
+                        for m in [5, 15, 25, 50] : Rectangle {
+                            width: 44px;
+                            height: 24px;
+                            border-radius: 12px;
+                            background: root.focus-minutes == m ? #2C2C31 : transparent;
+                            Text { text: m + "m"; color: root.focus-minutes == m ? white : #8E8E93; font-size: 12px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                            TouchArea { clicked => { root.focus-preset(m); } mouse-cursor: pointer; }
+                        }
+                    }
+                }
+
+                // ---- página: água ----
+                if root.page == 3 : HorizontalLayout {
+                    spacing: 24px;
+                    VerticalLayout {
+                        width: 210px;
+                        alignment: center;
+                        spacing: 4px;
+                        Text { text: root.water + "/" + root.water-goal; color: white; font-size: 42px; font-weight: 800; }
+                        Text { text: "copos de água hoje"; color: #8E8E93; font-size: 13px; }
+                        Rectangle { height: 8px; }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            Pill { primary: true; glyph: "\u{E710}"; label: "1 copo"; clicked => { root.water-add(); } }
+                            Pill { glyph: "\u{E738}"; label: "Desfazer"; clicked => { root.water-remove(); } }
+                        }
+                    }
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 10px;
+                        for g[i] in root.water-goal : Rectangle {
+                            width: 24px;
+                            height: 40px;
+                            y: 40px;
+                            border-radius: 6px;
+                            border-width: 1.5px;
+                            border-color: #0A84FF;
+                            background: i < root.water ? #0A84FF : transparent;
+                        }
                     }
                 }
             }
