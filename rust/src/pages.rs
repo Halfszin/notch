@@ -44,10 +44,12 @@ pub fn setup(notch: &Notch) {
     }
     {
         let (tasks, show) = (tasks.clone(), show.clone());
-        notch.on_add_task(move |title| {
-            let title = title.trim().to_string();
-            if title.is_empty() { return; }
-            tasks.borrow_mut().insert(0, Task { title, ..Default::default() });
+        notch.on_add_task(move |input| {
+            if input.trim().is_empty() { return; }
+            // "Ligar pro João às 15:30" vira tarefa com lembrete (mesma regra do Orbi em C#).
+            let (title, due) = crate::taskparse::parse(&input, crate::system::now());
+            let title = if title.is_empty() { input.trim().to_string() } else { title };
+            tasks.borrow_mut().insert(0, Task { title, due: due.map(|d| d.iso()), ..Default::default() });
             store::save(TASKS, &*tasks.borrow());
             show();
         });
@@ -59,6 +61,29 @@ pub fn setup(notch: &Notch) {
             store::save(TASKS, &*tasks.borrow());
             show();
         });
+    }
+
+    // ---- lembretes: na hora marcada, aviso no notch (cada um uma vez só) ----
+    {
+        let (tasks, show, weak) = (tasks.clone(), show.clone(), notch.as_weak());
+        let timer = Timer::default();
+        timer.start(TimerMode::Repeated, Duration::from_secs(1), move || {
+            let now = crate::system::now().iso();
+            let mut fired = Vec::new();
+            {
+                let mut t = tasks.borrow_mut();
+                for task in t.iter_mut().filter(|x| !x.done && !x.notified) {
+                    // Datas no formato aaaa-mm-ddThh:mm:ss: comparar o texto já compara a data.
+                    if task.due.as_deref().is_some_and(|d| d <= now.as_str()) { task.notified = true; fired.push(task.title.clone()); }
+                }
+                if !fired.is_empty() { store::save(TASKS, &*t); }
+            }
+            if let (Some(n), Some(title)) = (weak.upgrade(), fired.first()) {
+                crate::features::toast(&n, "\u{E787}", &format!("Lembrete: {title}"), slint::Color::from_rgb_u8(0xFF, 0x9F, 0x0A), 10);
+                show();
+            }
+        });
+        std::mem::forget(timer);
     }
 
     // ---- foco ----

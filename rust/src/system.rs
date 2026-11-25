@@ -66,6 +66,7 @@ pub fn setup(notch: &Notch) {
     // (depois da animação de fechar) ao fechar. Os olhos seguem o mouse.
     let weak = notch.as_weak();
     let big = std::rc::Rc::new(std::cell::Cell::new(true));
+    let size_now = std::rc::Rc::new(std::cell::Cell::new((n_big_w(notch), n_big_h(notch))));
     let close_at: std::rc::Rc<std::cell::Cell<Option<std::time::Instant>>> = Default::default();
     let fast = Timer::default();
     fast.start(TimerMode::Repeated, Duration::from_millis(30), move || {
@@ -90,6 +91,8 @@ pub fn setup(notch: &Notch) {
             let open = n.get_open();
             let (lw, lh) = if open || close_at.get().is_some_and(|t| std::time::Instant::now() < t) {
                 (n.get_big_width(), n.get_big_height())
+            } else if n.get_toasting() {
+                (n.get_toast_width(), n.get_toast_height())
             } else {
                 (n.get_closed_width(), n.get_closed_height())
             };
@@ -98,8 +101,10 @@ pub fn setup(notch: &Notch) {
             } else if big.get() && close_at.get().is_none() {
                 close_at.set(Some(std::time::Instant::now() + Duration::from_millis(450))); // deixa a animação de fechar terminar
             }
-            let want_big = lw > n.get_closed_width();
-            if want_big != big.get() {
+            let want_big = lw >= n.get_big_width();
+            let changed = (lw, lh) != size_now.get();
+            if changed {
+                size_now.set((lw, lh));
                 big.set(want_big);
                 if !want_big { close_at.set(None); }
                 let screen_w = unsafe { GetSystemMetrics(SM_CXSCREEN) } as f64;
@@ -107,9 +112,11 @@ pub fn setup(notch: &Notch) {
                 w.set_outer_position(winit::dpi::PhysicalPosition::new(((screen_w - lw as f64 * scale) / 2.0) as i32, 0));
             }
 
+            // Notas abertas: a janela aceita teclado (clicar no texto já deixa digitar).
             // Notch fechou: volta a não roubar o foco.
-            if !open {
-                if let Some(hwnd) = hwnd_of(w) { set_noactivate(hwnd, true); }
+            if let Some(hwnd) = hwnd_of(w) {
+                if open && n.get_page() == 4 { set_noactivate(hwnd, false); }
+                else if !open { set_noactivate(hwnd, true); }
             }
             // Centro aproximado do avatar (lado esquerdo do notch aberto).
             let ax = left + 46.0 * scale + 70.0 * scale;
@@ -146,6 +153,9 @@ pub fn setup(notch: &Notch) {
     std::mem::forget(slow);
 }
 
+fn n_big_w(n: &Notch) -> f32 { n.get_big_width() }
+fn n_big_h(n: &Notch) -> f32 { n.get_big_height() }
+
 fn set_noactivate(hwnd: HWND, on: bool) {
     unsafe {
         let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
@@ -153,6 +163,12 @@ fn set_noactivate(hwnd: HWND, on: bool) {
         let want = if on { ex | flag } else { ex & !flag };
         if want != ex { SetWindowLongPtrW(hwnd, GWL_EXSTYLE, want); }
     }
+}
+
+/// Agora, no relógio do PC (para lembretes e tarefas com hora).
+pub fn now() -> crate::taskparse::When {
+    let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
+    crate::taskparse::When { year: t.wYear as i32, month: t.wMonth as u32, day: t.wDay as u32, hour: t.wHour as u32, minute: t.wMinute as u32 }
 }
 
 fn hwnd_of(w: &winit::window::Window) -> Option<HWND> {

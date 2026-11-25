@@ -40,6 +40,7 @@ jobs:
           # Tarefas de exemplo (mesmo arquivo do Orbi em C#): 4 de 5 feitas.
           New-Item -ItemType Directory "$env:APPDATA\Orbi" -Force | Out-Null
           '[{"Title":"Revisar o relatorio","Done":true},{"Title":"Responder a Dina","Done":true},{"Title":"Postar a atualizacao","Done":true},{"Title":"Ligar pro banco","Done":true},{"Title":"Comprar pao","Due":"2026-11-25T18:00:00","Done":false}]' | Set-Content "$env:APPDATA\Orbi\tarefas.json" -Encoding utf8
+          '[{"Name":"Bloco de notas","Target":"C:\\Windows\\System32\\notepad.exe"},{"Name":"github.com","Target":"https://github.com/"},{"Name":"Windows","Target":"C:\\Windows"}]' | Set-Content "$env:APPDATA\Orbi\atalhos.json" -Encoding utf8
           Add-Type -Namespace W -Name M -MemberDefinition '[DllImport("user32.dll")] public static extern void mouse_event(uint f, int x, int y, int d, System.UIntPtr e);'
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 900, 700
           $p = Start-Process $exe -PassThru
@@ -62,6 +63,13 @@ jobs:
           [W.M]::mouse_event(0x0004, 0, 0, 0, [System.UIntPtr]::Zero)
           Start-Sleep 1
           Shot "5-depois-do-clique"
+          # Páginas novas (leva 1): Foco → Calendário → Notas → Copiados → Sistema → Atalhos.
+          Set-Clipboard -Value "Texto copiado no teste do CI"
+          foreach ($name in "6-foco", "7-calendario", "8-notas", "9-copiados", "10-sistema", "11-atalhos") {
+            [W.M]::mouse_event(0x0800, 0, 0, -120, [System.UIntPtr]::Zero)
+            Start-Sleep 1
+            Shot $name
+          }
           "vivo=$(-not $p.HasExited)" | Out-File ci\resultado.txt -Append
           if (Test-Path "$env:APPDATA\Orbi\rust-erro.log") { Copy-Item "$env:APPDATA\Orbi\rust-erro.log" ci\erro.log }
           if (Test-Path "$env:APPDATA\Orbi\rust-diag.txt") { Copy-Item "$env:APPDATA\Orbi\rust-diag.txt" ci\diag.txt }

@@ -1,36 +1,43 @@
 // Interface do notch do Orbi (Rust + Slint, sem HTML).
-import { LineEdit } from "std-widgets.slint";
+import { LineEdit, TextEdit } from "std-widgets.slint";
 
 export struct TaskRow { title: string, done: bool, due: string }
+export struct DayCell { day: int, in-month: bool, today: bool }
+export struct ShortcutItem { name: string, glyph: string, tint: color }
 
 // Anel da bateria: trilho + arco no sentido horário a partir do topo.
 component Ring inherits Rectangle {
+    in property <length> size: 16px;
+    in property <length> stroke: 2.5px;
     in property <float> value: 1;
     in property <color> tint: #30D158;
     in property <bool> bolt;
-    width: 16px;
-    height: 16px;
-    property <float> r: 6.75;
+    width: root.size;
+    height: root.size;
+    // Arco no meio do traço; com o padrão (16 px, traço 2,5) dá exatamente o anel de antes.
+    property <float> sz: root.size / 1px;
+    property <float> st: root.stroke / 1px;
+    property <float> r: (root.sz - root.st) / 2;
     property <angle> a: clamp(root.value, 0, 1) * 360deg;
     Rectangle {
         border-radius: self.width / 2;
-        border-width: 2.5px;
+        border-width: root.stroke;
         border-color: #2E2E31;
     }
     if root.value >= 0.999 : Rectangle {
         border-radius: self.width / 2;
-        border-width: 2.5px;
+        border-width: root.stroke;
         border-color: root.tint;
     }
     if root.value > 0.01 && root.value < 0.999 : Path {
-        width: 16px;
-        height: 16px;
-        viewbox-width: 16;
-        viewbox-height: 16;
+        width: root.size;
+        height: root.size;
+        viewbox-width: root.sz;
+        viewbox-height: root.sz;
         stroke: root.tint;
-        stroke-width: 2.5px;
-        commands: "M 8 1.25 A " + root.r + " " + root.r + " 0 " + (root.value > 0.5 ? "1" : "0") + " 1 "
-            + (8 + root.r * sin(root.a)) + " " + (8 - root.r * cos(root.a));
+        stroke-width: root.stroke;
+        commands: "M " + (root.sz / 2) + " " + (root.st / 2) + " A " + root.r + " " + root.r + " 0 " + (root.value > 0.5 ? "1" : "0") + " 1 "
+            + (root.sz / 2 + root.r * sin(root.a)) + " " + (root.sz / 2 - root.r * cos(root.a));
     }
     if root.bolt : Text {
         text: "\u{E945}";
@@ -162,7 +169,7 @@ export component Notch inherits Window {
     in-out property <bool> adding;
     // O Rust decide pela posição do mouse (não depende do aviso de "mouse em cima" da janela).
     in property <bool> hovered;
-    out property <bool> open: root.hovered || ta.has-hover || root.adding;
+    out property <bool> open: root.hovered || ta.has-hover || root.adding || root.notes-focused;
     callback quit();
     in property <string> clock: "00:00";
     in property <string> closed-text: root.clock;
@@ -195,9 +202,9 @@ export component Notch inherits Window {
 
     // páginas: 0 música, 1 tarefas, 2 foco
     in-out property <int> page: 0;
-    property <int> pages: 3;
-    property <[string]> titles: ["Tocando", "Tarefas", "Foco"];
-    property <[string]> subtitles: ["agora", "hoje", "timer"];
+    property <int> pages: 8;
+    property <[string]> titles: ["Tocando", "Tarefas", "Foco", "Calendário", "Notas", "Copiados", "Sistema", "Atalhos"];
+    property <[string]> subtitles: ["agora", "hoje", "timer", "do mês", "rápidas", "recentes", "agora", "rápidos"];
 
     // tarefas
     in property <[TaskRow]> tasks;
@@ -207,6 +214,44 @@ export component Notch inherits Window {
     callback add-task(string);
     callback clear-done();
     callback want-keyboard();
+
+    // aviso rápido no notch fechado (carregador, bateria fraca, fone, lembrete)
+    in property <bool> toasting;
+    in property <string> toast-text;
+    in property <string> toast-glyph;
+    in property <color> toast-color: white;
+    out property <length> toast-width: 360px;
+    out property <length> toast-height: 36px;
+
+    // calendário
+    in property <string> month-name;
+    in property <[DayCell]> days;
+    callback month-prev();
+    callback month-next();
+
+    // notas (salvas sozinhas)
+    in-out property <string> notes;
+    in-out property <bool> notes-focused: false;
+    callback notes-edited(string);
+
+    // área de transferência
+    in property <[string]> clips;
+    in property <string> clip-hint: "Clique para copiar de novo";
+    callback copy-clip(int);
+    callback clear-clips();
+
+    // sistema
+    in property <float> cpu;
+    in property <float> ram;
+    in property <string> cpu-text: "—";
+    in property <string> ram-text: "—";
+    in property <string> ram-detail;
+    in property <string> battery-detail;
+    in property <string> audio-device: "Saída de áudio";
+
+    // atalhos
+    in property <[ShortcutItem]> shortcuts;
+    callback open-shortcut(int);
 
     // foco
     in property <string> focus-text: "25:00";
@@ -221,8 +266,8 @@ export component Notch inherits Window {
     property <bool> music-glow: root.page == 0 && root.has-cover;
 
     pill := Rectangle {
-        width: root.open ? root.open-width : root.closed-width;
-        height: root.open ? root.open-height : root.closed-height;
+        width: root.open ? root.open-width : root.toasting ? root.toast-width : root.closed-width;
+        height: root.open ? root.open-height : root.toasting ? root.toast-height : root.closed-height;
         x: (root.width - self.width) / 2;
         y: 0;
         animate width, height { duration: 420ms; easing: ease-out-back; }
@@ -244,7 +289,7 @@ export component Notch inherits Window {
 
         // ---- fechado: anel da bateria + hora (ou o timer, quando corre) ----
         HorizontalLayout {
-            opacity: root.open ? 0 : 1;
+            opacity: root.open || root.toasting ? 0 : 1;
             animate opacity { duration: 150ms; }
             alignment: center;
             spacing: 6px;
@@ -252,6 +297,18 @@ export component Notch inherits Window {
             padding-bottom: 8px;
             Ring { value: root.battery; tint: root.ring-color; bolt: root.charging; }
             Text { text: root.closed-text; color: root.focus-running ? #FF9F0A : white; font-size: 13px; font-weight: 600; vertical-alignment: center; }
+        }
+
+        // ---- aviso rápido ----
+        HorizontalLayout {
+            opacity: root.toasting && !root.open ? 1 : 0;
+            animate opacity { duration: 160ms; delay: 120ms; }
+            alignment: center;
+            spacing: 8px;
+            padding-left: 16px;
+            padding-right: 16px;
+            Text { text: root.toast-glyph; font-family: "Segoe MDL2 Assets"; font-size: 14px; color: root.toast-color; vertical-alignment: center; }
+            Text { text: root.toast-text; color: white; font-size: 13px; font-weight: 600; vertical-alignment: center; overflow: elide; }
         }
 
         // ---- aberto ----
@@ -443,6 +500,136 @@ export component Notch inherits Window {
                             background: root.focus-minutes == m ? #2C2C31 : transparent;
                             Text { text: m + "m"; color: root.focus-minutes == m ? white : #8E8E93; font-size: 12px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
                             TouchArea { clicked => { root.focus-preset(m); } mouse-cursor: pointer; }
+                        }
+                    }
+                }
+
+                // ---- página: calendário ----
+                if root.page == 3 : VerticalLayout {
+                    spacing: 4px;
+                    HorizontalLayout {
+                        height: 26px;
+                        Text { text: root.month-name; color: white; font-size: 14px; font-weight: 700; vertical-alignment: center; }
+                        IconButton { glyph: "\u{E76B}"; size: 11px; clicked => { root.month-prev(); } }
+                        IconButton { glyph: "\u{E76C}"; size: 11px; clicked => { root.month-next(); } }
+                    }
+                    HorizontalLayout {
+                        for d in ["D", "S", "T", "Q", "Q", "S", "S"] : Text { text: d; color: #8E8E93; font-size: 11px; horizontal-alignment: center; }
+                    }
+                    for row in 6 : HorizontalLayout {
+                        for col in 7 : Rectangle {
+                            property <DayCell> cell: root.days[row * 7 + col];
+                            height: 21px;
+                            border-radius: 6px;
+                            background: self.cell.today ? white : transparent;
+                            Text {
+                                text: parent.cell.day;
+                                font-size: 12px;
+                                font-weight: parent.cell.today ? 700 : 400;
+                                color: parent.cell.today ? black : (parent.cell.in-month ? white : #48484A);
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+
+                // ---- página: notas rápidas ----
+                if root.page == 4 : Rectangle {
+                    border-radius: 14px;
+                    background: #141416;
+                    notes-edit := TextEdit {
+                        x: 4px; y: 4px; width: parent.width - 8px; height: parent.height - 8px;
+                        text <=> root.notes;
+                        font-size: 13px;
+                        wrap: word-wrap;
+                        placeholder-text: "Anote algo rápido… (salva sozinho)";
+                        edited(text) => { root.notes-edited(text); }
+                        // O notch fica aberto enquanto você digita.
+                        changed has-focus => { root.notes-focused = self.has-focus; }
+                    }
+                }
+
+                // ---- página: área de transferência ----
+                if root.page == 5 : VerticalLayout {
+                    spacing: 6px;
+                    HorizontalLayout {
+                        height: 18px;
+                        Text { text: root.clips.length == 0 ? "Copie um texto (Ctrl+C) e ele aparece aqui." : root.clip-hint; color: #8E8E93; font-size: 12px; }
+                        if root.clips.length > 0 : Text {
+                            text: "Limpar"; color: #8E8E93; font-size: 12px; horizontal-alignment: right;
+                            TouchArea { clicked => { root.clear-clips(); } mouse-cursor: pointer; }
+                        }
+                    }
+                    Flickable {
+                        content-height: clip-list.preferred-height;
+                        clip-list := VerticalLayout {
+                            spacing: 4px;
+                            alignment: start;
+                            for c[i] in root.clips : Rectangle {
+                                height: 30px;
+                                border-radius: 8px;
+                                background: clip-ta.has-hover ? #26262B : #1C1C20;
+                                Text { x: 10px; width: parent.width - 20px; text: c; color: white; font-size: 12.5px; vertical-alignment: center; overflow: elide; }
+                                clip-ta := TouchArea { clicked => { root.copy-clip(i); } mouse-cursor: pointer; }
+                            }
+                        }
+                    }
+                }
+
+                // ---- página: sistema ----
+                if root.page == 6 : VerticalLayout {
+                    alignment: center;
+                    spacing: 10px;
+                    HorizontalLayout {
+                        alignment: space-around;
+                        for g in [
+                            { v: root.cpu, t: root.cpu-text, n: "CPU", d: "processador", c: root.cpu > 0.85 ? #FF453A : #30D158 },
+                            { v: root.ram, t: root.ram-text, n: "Memória", d: root.ram-detail, c: root.ram > 0.9 ? #FF453A : #0A84FF },
+                            { v: root.has-battery ? root.battery : 0, t: root.has-battery ? round(root.battery * 100) + "%" : "—", n: "Bateria", d: root.battery-detail, c: root.ring-color },
+                        ] : VerticalLayout {
+                            spacing: 4px;
+                            alignment: center;
+                            Rectangle {
+                                width: 84px;
+                                height: 84px;
+                                Ring { width: 84px; height: 84px; size: 84px; stroke: 8px; value: g.v; tint: g.c; }
+                                Text { text: g.t; color: white; font-size: 17px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            Text { text: g.n; color: white; font-size: 12.5px; horizontal-alignment: center; }
+                            Text { text: g.d; color: #8E8E93; font-size: 11px; horizontal-alignment: center; }
+                        }
+                    }
+                    Text { text: "\u{E7F6}  " + root.audio-device; font-family: "Segoe UI"; color: #8E8E93; font-size: 11.5px; horizontal-alignment: center; }
+                }
+
+                // ---- página: atalhos ----
+                if root.page == 7 : Flickable {
+                    content-height: grid.preferred-height;
+                    grid := VerticalLayout {
+                        alignment: start;
+                        spacing: 8px;
+                        for row in ceil(root.shortcuts.length / 6) : HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            for col in 6 : Rectangle {
+                                property <int> k: row * 6 + col;
+                                width: 74px;
+                                height: 72px;
+                                visible: self.k < root.shortcuts.length;
+                                VerticalLayout {
+                                    alignment: center;
+                                    spacing: 5px;
+                                    Rectangle {
+                                        width: 42px; height: 42px; x: 16px;
+                                        border-radius: 12px;
+                                        background: sc-ta.has-hover ? #2C2C31 : #1E1E22;
+                                        Text { text: root.shortcuts[k].glyph; font-family: "Segoe MDL2 Assets"; font-size: 18px; color: root.shortcuts[k].tint; horizontal-alignment: center; vertical-alignment: center; }
+                                    }
+                                    Text { text: root.shortcuts[k].name; color: #AEAEB2; font-size: 11px; horizontal-alignment: center; overflow: elide; }
+                                }
+                                sc-ta := TouchArea { clicked => { root.open-shortcut(k); } mouse-cursor: pointer; }
+                            }
                         }
                     }
                 }
