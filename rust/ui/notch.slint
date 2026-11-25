@@ -1,0 +1,245 @@
+// Interface do notch do Orbi (Rust + Slint, sem HTML).
+
+// Anel da bateria: trilho + arco no sentido horário a partir do topo.
+component Ring inherits Rectangle {
+    in property <float> value: 1;
+    in property <color> tint: #30D158;
+    in property <bool> bolt;
+    width: 16px;
+    height: 16px;
+    property <float> r: 6.75;
+    property <angle> a: clamp(root.value, 0, 1) * 360deg;
+    Rectangle {
+        border-radius: self.width / 2;
+        border-width: 2.5px;
+        border-color: #2E2E31;
+    }
+    if root.value >= 0.999 : Rectangle {
+        border-radius: self.width / 2;
+        border-width: 2.5px;
+        border-color: root.tint;
+    }
+    if root.value > 0.01 && root.value < 0.999 : Path {
+        width: 16px;
+        height: 16px;
+        viewbox-width: 16;
+        viewbox-height: 16;
+        stroke: root.tint;
+        stroke-width: 2.5px;
+        commands: "M 8 1.25 A " + root.r + " " + root.r + " 0 " + (root.value > 0.5 ? "1" : "0") + " 1 "
+            + (8 + root.r * sin(root.a)) + " " + (8 - root.r * cos(root.a));
+    }
+    if root.bolt : Text {
+        text: "\u{E945}";
+        font-family: "Segoe MDL2 Assets";
+        font-size: 7px;
+        color: root.tint;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+// Avatar do Orbi desenhado em vetor: corpo branco, olhos que piscam e seguem o mouse, sorriso.
+component Avatar inherits Rectangle {
+    in property <float> look-x;
+    in property <float> look-y;
+    in property <float> pulse;
+    property <duration> t: animation-tick();
+    // Pisca ~140 ms a cada 4,2 s.
+    property <bool> blink: mod(root.t / 1ms, 4200) < 140;
+    property <length> size: root.width * 0.82 * (1 + root.pulse * 0.1);
+    body := Rectangle {
+        width: root.size;
+        height: root.size;
+        x: (root.width - self.width) / 2 + root.look-x * 3px;
+        // "Respira": sobe e desce devagar.
+        y: (root.height - self.height) / 2 + sin(root.t / 1s * 70deg) * 2px - root.look-y * 2px;
+        border-radius: self.width / 2;
+        background: white;
+        drop-shadow-blur: 28px;
+        drop-shadow-color: #FFE2B855;
+        for side in [-1, 1] : Rectangle {
+            width: body.width * 0.12;
+            height: root.blink ? 2px : body.width * 0.2;
+            x: body.width / 2 + side * body.width * 0.17 - self.width / 2 + root.look-x * body.width * 0.07;
+            y: body.height * 0.36 - root.look-y * body.height * 0.06 + (root.blink ? body.width * 0.09 : 0px);
+            border-radius: self.width / 2;
+            background: #111316;
+        }
+        Path {
+            width: body.width * 0.2;
+            height: body.height * 0.07;
+            x: (body.width - self.width) / 2 + root.look-x * body.width * 0.05;
+            y: body.height * 0.66 - root.look-y * body.height * 0.04;
+            viewbox-width: 20;
+            viewbox-height: 6;
+            stroke: #111316;
+            stroke-width: 2.5px;
+            commands: "M 1 1 Q 10 7 19 1";
+        }
+    }
+}
+
+component IconButton inherits Rectangle {
+    in property <string> glyph;
+    in property <length> size: 15px;
+    in property <color> tint: #DDDDDD;
+    callback clicked();
+    width: 34px;
+    height: 30px;
+    border-radius: 15px;
+    background: ta.has-hover ? #FFFFFF18 : transparent;
+    Text {
+        text: root.glyph;
+        font-family: "Segoe MDL2 Assets";
+        font-size: root.size;
+        color: root.tint;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+        mouse-cursor: pointer;
+    }
+}
+
+export component Notch inherits Window {
+    title: "Orbi";
+    no-frame: true;
+    always-on-top: true;
+    background: transparent;
+    width: 640px;
+    height: 290px;
+    default-font-family: "Segoe UI";
+
+    // Tamanhos do notch (o Rust usa os mesmos números para saber onde o clique vale).
+    out property <length> open-width: 600px;
+    out property <length> open-height: 250px;
+    out property <length> closed-width: 132px;
+    out property <length> closed-height: 32px;
+
+    out property <bool> open: ta.has-hover;
+    in property <string> clock: "00:00";
+    in property <string> date-text;
+    in property <float> battery: 1;
+    in property <bool> charging;
+    in property <bool> has-battery: true;
+    in property <string> song: "Nada tocando";
+    in property <string> artist;
+    in property <image> cover;
+    in property <bool> has-cover;
+    in property <color> accent: #1A2A5C;
+    in property <bool> playing;
+    in property <float> progress;
+    in property <string> elapsed: "0:00";
+    in property <string> remaining: "-0:00";
+    in property <float> look-x;
+    in property <float> look-y;
+
+    callback play-pause();
+    callback next();
+    callback previous();
+
+    property <color> ring-color: !root.has-battery ? #8E8E93 : (root.battery <= 0.2 && !root.charging ? #FF453A : #30D158);
+
+    pill := Rectangle {
+        width: root.open ? root.open-width : root.closed-width;
+        height: root.open ? root.open-height : root.closed-height;
+        x: (root.width - self.width) / 2;
+        y: 0;
+        animate width, height { duration: 420ms; easing: ease-out-back; }
+        border-bottom-left-radius: root.open ? 30px : 16px;
+        border-bottom-right-radius: root.open ? 30px : 16px;
+        animate border-bottom-left-radius, border-bottom-right-radius { duration: 300ms; }
+        clip: true;
+        // Fechado: preto. Aberto: degradê do preto para a cor da capa (estilo Nusa).
+        background: root.open && root.has-cover ? @linear-gradient(180deg, #000000 0%, #000000 35%, root.accent 100%) : #000000;
+
+        ta := TouchArea { }
+
+        // ---- fechado: anel da bateria + hora ----
+        HorizontalLayout {
+            opacity: root.open ? 0 : 1;
+            animate opacity { duration: 150ms; }
+            alignment: center;
+            spacing: 6px;
+            padding-top: 8px;
+            padding-bottom: 8px;
+            Ring { value: root.battery; tint: root.ring-color; bolt: root.charging; }
+            Text { text: root.clock; color: white; font-size: 13px; font-weight: 600; vertical-alignment: center; }
+        }
+
+        // ---- aberto ----
+        VerticalLayout {
+            opacity: root.open ? 1 : 0;
+            animate opacity { duration: 220ms; delay: 90ms; }
+            padding: 18px;
+            padding-top: 10px;
+            spacing: 8px;
+
+            HorizontalLayout {
+                height: 24px;
+                spacing: 8px;
+                Text { text: root.date-text; color: #8E8E93; font-size: 12px; vertical-alignment: center; }
+                Rectangle { }
+                Ring { value: root.battery; tint: root.ring-color; bolt: root.charging; y: 4px; }
+                if root.has-battery : Text { text: round(root.battery * 100) + "%"; color: #AEAEB2; font-size: 12px; vertical-alignment: center; }
+                Text { text: root.clock; color: white; font-size: 12px; font-weight: 700; vertical-alignment: center; }
+            }
+
+            HorizontalLayout {
+                spacing: 16px;
+                Avatar {
+                    width: 150px;
+                    look-x: root.look-x;
+                    look-y: root.look-y;
+                }
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 12px;
+                        Rectangle {
+                            width: 64px;
+                            height: 64px;
+                            border-radius: 12px;
+                            clip: true;
+                            background: #222226;
+                            if root.has-cover : Image { source: root.cover; width: parent.width; height: parent.height; image-fit: ImageFit.cover; }
+                            if !root.has-cover : Text { text: "\u{E8D6}"; font-family: "Segoe MDL2 Assets"; font-size: 22px; color: #777777; horizontal-alignment: center; vertical-alignment: center; }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Text { text: root.song; color: white; font-size: 16px; font-weight: 700; overflow: elide; }
+                            Text { text: root.artist; color: #FFFFFFAA; font-size: 13px; overflow: elide; }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 10px;
+                        Text { text: root.elapsed; color: #FFFFFFAA; font-size: 11px; width: 36px; vertical-alignment: center; }
+                        Rectangle {
+                            height: 4px;
+                            y: 7px;
+                            border-radius: 2px;
+                            background: #FFFFFF33;
+                            Rectangle {
+                                x: 0;
+                                width: parent.width * clamp(root.progress, 0, 1);
+                                border-radius: 2px;
+                                background: white;
+                            }
+                        }
+                        Text { text: root.remaining; color: #FFFFFFAA; font-size: 11px; width: 40px; horizontal-alignment: right; vertical-alignment: center; }
+                    }
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 6px;
+                        IconButton { glyph: "\u{E892}"; clicked => { root.previous(); } }
+                        IconButton { glyph: root.playing ? "\u{E769}" : "\u{E768}"; size: 19px; tint: white; clicked => { root.play-pause(); } }
+                        IconButton { glyph: "\u{E893}"; clicked => { root.next(); } }
+                    }
+                }
+            }
+        }
+    }
+}

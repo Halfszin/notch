@@ -1,0 +1,71 @@
+name: rust
+
+on:
+  push:
+    branches: [main]
+    paths: ["rust/**", ".github/workflows/rust.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Testes
+        run: cargo test --release
+
+      - name: Compilar
+        run: cargo build --release
+
+      - name: Abrir o Orbi (Rust) e tirar prints
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          New-Item -ItemType Directory ci -Force | Out-Null
+          function Shot($name) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save("ci\$name.png")
+          }
+          $exe = "target\release\orbi.exe"
+          "tamanho=$([math]::Round((Get-Item $exe).Length / 1MB, 1)) MB" | Out-File ci\resultado.txt
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 900, 700
+          $p = Start-Process $exe -PassThru
+          Start-Sleep 6
+          Shot "1-fechado"
+          $w = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($w / 2)), 10
+          Start-Sleep 2
+          Shot "2-aberto"
+          "vivo=$(-not $p.HasExited)" | Out-File ci\resultado.txt -Append
+          if (-not $p.HasExited) { Stop-Process $p -Force }
+
+      - name: Guardar prints no branch ci-results-rust
+        shell: bash
+        run: |
+          cd ci
+          git init -q -b ci-results-rust && git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "rust ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-results-rust
+
+      - name: Falhar se fechou
+        shell: pwsh
+        run: if (-not (Select-String -Path ci\resultado.txt -Pattern 'vivo=True' -Quiet)) { exit 1 }
+
+      - name: Publicar a prévia
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp target/release/orbi.exe Orbi-rust.exe
+          gh release create rust-preview Orbi-rust.exe --prerelease --title "Orbi em Rust (prévia)" \
+            --notes "Prévia da versão em Rust. Não substitui o Orbi atual: baixe e abra o Orbi-rust.exe para testar." \
+            || gh release upload rust-preview Orbi-rust.exe --clobber
