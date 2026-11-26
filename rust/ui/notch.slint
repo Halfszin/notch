@@ -476,7 +476,8 @@ export component Notch inherits Window {
         clip: true;
         // Fechado: preto. Música aberta: degradê do preto para a cor da capa (estilo Nusa).
         // Chat do Claude: o mesmo degradê da música, na cor do Claude (escurecida como as capas).
-        background: root.open && root.chat-open && root.gradient-enabled ? @linear-gradient(180deg, #000000 0%, #000000 30%, #7A3E2C 100%)
+        // Chat do Claude: degradê fixo no laranja do Claude Code (não depende da música nem da chave do degradê).
+        background: root.open && root.chat-open ? @linear-gradient(180deg, #000000 0%, #000000 35%, #D97757 135%)
             : root.open && root.music-glow && !root.chat-open ? @linear-gradient(180deg, #000000 0%, #000000 30%, root.accent 100%) : #000000;
 
         ta := TouchArea {
@@ -985,8 +986,8 @@ export component Notch inherits Window {
                     chat-flick := Flickable {
                         vertical-stretch: 1;
                         content-height: chat-list.preferred-height;
-                        // Sempre mostra o fim da conversa.
-                        content-y: min(0px, self.height - chat-list.preferred-height);
+                        // Rola sozinho para o fim quando entra pergunta, "pensando…" ou resposta.
+                        changed content-height => { self.content-y = min(0px, self.height - self.content-height); }
                         chat-list := VerticalLayout {
                             alignment: end;
                             spacing: 6px;
@@ -1014,18 +1015,63 @@ export component Notch inherits Window {
                             if root.chat-busy : Text { text: "Claude está pensando…"; color: #D97757; font-size: 12px; }
                         }
                     }
-                    HorizontalLayout {
-                        spacing: 8px;
-                        height: 32px;
-                        chat-input := LineEdit {
-                            placeholder-text: "Mensagem para o Claude";
-                            font-size: 12.5px;
-                            enabled: !root.chat-busy;
-                            changed has-focus => { root.chat-focused = self.has-focus; if (self.has-focus) { root.want-keyboard(); } }
-                            accepted(text) => { if (text != "") { root.chat-send(text); self.text = ""; } }
+                    // Caixa de mensagem no estilo do Claude no navegador: cartão escuro arredondado,
+                    // botão de enviar laranja e lixeira discreta.
+                    Rectangle {
+                        height: 44px;
+                        border-radius: 16px;
+                        background: #262422F2;
+                        border-width: 1px;
+                        border-color: chat-input.has-focus ? #D9775799 : #FFFFFF1F;
+                        animate border-color { duration: 150ms; }
+                        HorizontalLayout {
+                            padding-left: 14px;
+                            padding-right: 6px;
+                            spacing: 6px;
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                if chat-input.text == "" : Text {
+                                    width: parent.width; height: parent.height;
+                                    text: root.chat-messages.length == 0 ? "Como posso ajudar?" : "Responder ao Claude…";
+                                    color: #8E8A86; font-size: 13px; vertical-alignment: center;
+                                }
+                                chat-input := TextInput {
+                                    width: parent.width; height: parent.height;
+                                    single-line: true;
+                                    vertical-alignment: center;
+                                    color: white;
+                                    font-size: 13px;
+                                    enabled: !root.chat-busy;
+                                    changed has-focus => { root.chat-focused = self.has-focus; if (self.has-focus) { root.want-keyboard(); } }
+                                    accepted => { if (self.text != "") { root.chat-send(self.text); self.text = ""; } }
+                                }
+                            }
+                            // Lixeira (limpa a conversa).
+                            VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    width: 32px; height: 32px; border-radius: 10px;
+                                    background: trash-ta.has-hover ? #FFFFFF1A : transparent;
+                                    Image { source: @image-url("icons/lixeira.png"); width: 18px; height: 18px; x: 7px; y: 7px; opacity: 0.75; }
+                                    trash-ta := TouchArea { mouse-cursor: pointer; clicked => { root.chat-clear(); } }
+                                }
+                            }
+                            // Enviar: quadradinho laranja, apagado quando não há texto.
+                            VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    property <bool> can: chat-input.text != "" && !root.chat-busy;
+                                    width: 32px; height: 32px; border-radius: 10px;
+                                    background: !self.can ? #D9775755 : send-ta.has-hover ? #E5886A : #D97757;
+                                    animate background { duration: 120ms; }
+                                    Image { source: @image-url("icons/enviar.png"); width: 16px; height: 16px; x: 8px; y: 8px; }
+                                    send-ta := TouchArea {
+                                        mouse-cursor: parent.can ? pointer : default;
+                                        clicked => { if (parent.can) { root.chat-send(chat-input.text); chat-input.text = ""; } }
+                                    }
+                                }
+                            }
                         }
-                        IconButton { glyph: "\u{E724}"; size: 13px; tint: #D97757; clicked => { if (chat-input.text != "" && !root.chat-busy) { root.chat-send(chat-input.text); chat-input.text = ""; } } }
-                        IconButton { glyph: "\u{E74D}"; size: 12px; tint: #8E8E93; clicked => { root.chat-clear(); } }
                     }
                 }
 
