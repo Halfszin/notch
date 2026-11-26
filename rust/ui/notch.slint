@@ -364,7 +364,8 @@ export component Notch inherits Window {
 
     property <length> pill-w: root.open ? root.open-width : root.toasting ? root.toast-width : root.closed-width;
     property <length> pill-h: root.open ? root.open-height : root.toasting ? root.toast-height : root.closed-height;
-    animate pill-w, pill-h { duration: 420ms; easing: ease-out-back; }
+    // Abrir (notch ou aviso) com o "pulinho"; recolher direto, sem passar do ponto (como no Orbi em C#).
+    animate pill-w, pill-h { duration: root.open || root.toasting ? 420ms : 300ms; easing: root.open || root.toasting ? ease-out-back : ease-out; }
     // Como no Orbi em C#: fechado, o notch inteiro (anel, barrinhas e hora juntos) cresce com o grave
     // e dá um tranco na batida; aberto fica parado para não atrapalhar os botões.
     property <float> beat-scale: root.open || root.game-mode ? 1 : 1 + 0.04 * root.level + 0.05 * root.pulse;
@@ -403,7 +404,8 @@ export component Notch inherits Window {
         // ---- fechado: anel da bateria + hora (ou o timer, quando corre) ----
         if root.side : VerticalLayout {
             opacity: root.open || root.toasting || root.game-mode ? 0 : 1;
-            animate opacity { duration: 150ms; }
+            // Some na hora; volta só depois que o notch encolheu (senão aparece por baixo do aviso).
+            animate opacity { duration: 150ms; delay: root.open || root.toasting ? 0ms : 200ms; }
             alignment: center;
             spacing: 6px;
             HorizontalLayout { alignment: center; Ring { value: root.battery; tint: root.ring-color; bolt: root.charging; } }
@@ -412,7 +414,8 @@ export component Notch inherits Window {
         }
         if !root.side : HorizontalLayout {
             opacity: root.open || root.toasting || root.game-mode ? 0 : 1;
-            animate opacity { duration: 150ms; }
+            // Some na hora; volta só depois que o notch encolheu (senão aparece por baixo do aviso).
+            animate opacity { duration: 150ms; delay: root.open || root.toasting ? 0ms : 200ms; }
             alignment: center;
             spacing: 0px; // os 6 px entre anel, barrinhas e hora ficam dentro da caixa das barrinhas
             // Anel de 18 px e hora centrados na mesma linha (medidas do Orbi em C#).
@@ -433,7 +436,8 @@ export component Notch inherits Window {
         // ---- aviso rápido ----
         HorizontalLayout {
             opacity: root.toasting && !root.open ? 1 : 0;
-            animate opacity { duration: 160ms; delay: 120ms; }
+            // Aviso: aparece depois que o notch abriu; ao recolher, some primeiro (antes do notch encolher).
+            animate opacity { duration: root.toasting ? 160ms : 90ms; delay: root.toasting ? 120ms : 0ms; }
             alignment: center;
             spacing: 8px;
             padding-left: 16px;
@@ -445,7 +449,8 @@ export component Notch inherits Window {
         // ---- aberto ----
         VerticalLayout {
             opacity: root.open ? 1 : 0;
-            animate opacity { duration: 220ms; delay: 90ms; }
+            // Abre depois do notch crescer; ao fechar, some antes dele encolher.
+            animate opacity { duration: root.open ? 220ms : 100ms; delay: root.open ? 90ms : 0ms; }
             padding-left: 46px; // espaço para as setas laterais
             padding-right: 46px;
             padding-top: 10px;
