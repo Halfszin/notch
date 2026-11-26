@@ -30,10 +30,17 @@ pub fn toast(n: &Notch, glyph: &str, text: &str, color: Color, secs: u64) {
     }));
 }
 
-/// Aviso de app (WhatsApp, Discord): o ícone de verdade do app (sem ele, um quadradinho da cor do app) e som.
+/// Aviso de app (WhatsApp, Discord, email): o ícone de verdade do app (sem ele, um quadradinho da cor do app) e som.
 pub fn toast_app(n: &Notch, app: &str, icon: Option<slint::Image>, text: &str) {
-    let color = if app == "WhatsApp" { Color::from_rgb_u8(0x25, 0xD3, 0x66) } else { Color::from_rgb_u8(0x58, 0x65, 0xF2) };
-    toast(n, if app == "WhatsApp" { "\u{E8BD}" } else { "\u{E8F2}" }, text, color, 5);
+    let (color, glyph) = match app {
+        "WhatsApp" => (Color::from_rgb_u8(0x25, 0xD3, 0x66), "\u{E8BD}"),
+        "Discord" => (Color::from_rgb_u8(0x58, 0x65, 0xF2), "\u{E8F2}"),
+        "Gmail" => (Color::from_rgb_u8(0xEA, 0x43, 0x35), "\u{E715}"),
+        _ => (Color::from_rgb_u8(0x0A, 0x84, 0xFF), "\u{E715}"), // email
+    };
+    // Navegador não tem ícone de email: fica o quadradinho com o envelope.
+    let icon = if app == "Gmail" { None } else { icon };
+    toast(n, glyph, text, color, 5);
     n.set_toast_badge(true);
     if let Some(icon) = icon {
         n.set_toast_icon(icon);

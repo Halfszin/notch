@@ -2,8 +2,16 @@
 // próprio Windows guarda as notificações (a mesma da Central de Notificações). Apps sem pacote da Loja
 // não têm outra API. O SQLite usado é o que já vem no Windows (winsqlite3.dll).
 
-/// Apps acompanhados: (trecho do id do app no Windows, nome mostrado).
-pub const APPS: [(&str, &str); 2] = [("whatsapp", "WhatsApp"), ("discord", "Discord")];
+/// Apps acompanhados: (trecho do id do app no Windows, nome mostrado). Email: Outlook (novo e clássico),
+/// o app Email do Windows e o Thunderbird.
+pub const APPS: [(&str, &str); 6] = [
+    ("whatsapp", "WhatsApp"), ("discord", "Discord"), ("outlookforwindows", "Outlook"), ("outlook", "Outlook"),
+    ("windowscommunicationsapps", "Email"), ("thunderbird", "Thunderbird"),
+];
+
+/// Navegadores: das notificações deles só entram as do email no navegador (Gmail, Outlook na web).
+const BROWSERS: [&str; 5] = ["chrome", "msedge", "firefox", "brave", "opera"];
+const WEBMAIL: [(&str, &str); 3] = [("mail.google.com", "Gmail"), ("outlook.live.com", "Outlook"), ("outlook.office.com", "Outlook")];
 
 /// Título e texto do XML de uma notificação (<toast><visual><binding><text>…).
 pub fn parse_toast(xml: &str) -> (String, String) {
@@ -27,9 +35,13 @@ fn unescape(s: &str) -> String {
     s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&#39;", "'").replace("&amp;", "&")
 }
 
-/// Qual dos apps acompanhados mandou (pelo id do app no Windows).
-pub fn app_of(handler: &str) -> Option<&'static str> {
+/// Qual dos apps acompanhados mandou (pelo id do app no Windows e, no navegador, pelo site da notificação).
+pub fn app_of(handler: &str, xml: &str) -> Option<&'static str> {
     let h = handler.to_lowercase();
+    if BROWSERS.iter().any(|b| h.contains(b)) {
+        let x = xml.to_lowercase();
+        return WEBMAIL.iter().find(|(site, _)| x.contains(site)).map(|(_, name)| *name);
+    }
     APPS.iter().find(|(m, _)| h.contains(m)).map(|(_, name)| *name)
 }
 
@@ -111,10 +123,10 @@ mod db {
                             let handler = (sql.text)(st, 1);
                             if handler.is_null() { return; }
                             let handler = CStr::from_ptr(handler as *const c_char).to_string_lossy().into_owned();
-                            let Some(app) = super::app_of(&handler) else { return };
                             let (p, n) = ((sql.blob)(st, 2), (sql.bytes)(st, 2));
                             if p.is_null() || n <= 0 { return; }
                             let xml = String::from_utf8_lossy(std::slice::from_raw_parts(p as *const u8, n as usize));
+                            let Some(app) = super::app_of(&handler, &xml) else { return };
                             let (title, body) = super::parse_toast(&xml);
                             if !title.is_empty() || !body.is_empty() { out.push((app, handler, title, body)); }
                         },
@@ -147,8 +159,13 @@ mod tests {
 
     #[test]
     fn reconhece_o_app() {
-        assert_eq!(app_of("5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App"), Some("WhatsApp"));
-        assert_eq!(app_of("com.squirrel.Discord.Discord"), Some("Discord"));
-        assert_eq!(app_of("Microsoft.Windows.Explorer"), None);
+        assert_eq!(app_of("5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App", ""), Some("WhatsApp"));
+        assert_eq!(app_of("com.squirrel.Discord.Discord", ""), Some("Discord"));
+        assert_eq!(app_of("Microsoft.OutlookForWindows_8wekyb3d8bbwe!Microsoft.OutlookforWindows", ""), Some("Outlook"));
+        assert_eq!(app_of("microsoft.windowscommunicationsapps_8wekyb3d8bbwe!microsoft.windowslive.mail", ""), Some("Email"));
+        assert_eq!(app_of("Microsoft.Windows.Explorer", ""), None);
+        // Navegador: só o Gmail/Outlook web, o resto dos sites fica de fora.
+        assert_eq!(app_of("Chrome", r#"<text placement="attribution">mail.google.com</text>"#), Some("Gmail"));
+        assert_eq!(app_of("MSEdge", r#"<text placement="attribution">youtube.com</text>"#), None);
     }
 }
