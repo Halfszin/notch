@@ -9,10 +9,18 @@ pub const APPS: [(&str, &str); 2] = [("whatsapp", "WhatsApp"), ("discord", "Disc
 pub fn parse_toast(xml: &str) -> (String, String) {
     let re = regex::Regex::new(r"(?s)<text\b[^>]*>(.*?)</text>").unwrap();
     let texts: Vec<String> = re.captures_iter(xml)
-        .map(|c| unescape(c[1].trim()))
+        .map(|c| no_emoji(&unescape(c[1].trim())))
         .filter(|t| !t.is_empty())
         .collect();
     (texts.first().cloned().unwrap_or_default(), texts.iter().skip(1).cloned().collect::<Vec<_>>().join(" "))
+}
+
+/// Tira emojis e símbolos que a fonte do notch não desenha (viravam um quadradinho) e junta os espaços.
+// shortcut: emojis somem em vez de aparecer; para mostrá-los, precisaria de fonte de emoji colorido no renderizador.
+pub fn no_emoji(s: &str) -> String {
+    let keep = |c: &char| !matches!(*c as u32,
+        0x1F000..=0x1FAFF | 0x2600..=0x27BF | 0x2B00..=0x2BFF | 0xFE00..=0xFE0F | 0x200D | 0x20E3 | 0xE000..=0xF8FF | 0xE0000..=0xE007F);
+    s.chars().filter(keep).collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn unescape(s: &str) -> String {
@@ -129,6 +137,12 @@ mod tests {
         let xml = r#"<toast launch="x"><visual><binding template="ToastGeneric"><text hint-maxLines="1">Maria</text><text>Bora &amp; vamos? &lt;3</text><text></text></binding></visual></toast>"#;
         assert_eq!(parse_toast(xml), ("Maria".into(), "Bora & vamos? <3".into()));
         assert_eq!(parse_toast("lixo"), (String::new(), String::new()));
+    }
+
+    #[test]
+    fn tira_emoji() {
+        assert_eq!(no_emoji("mano 😂👍🏽  2 mensagens"), "mano 2 mensagens");
+        assert_eq!(no_emoji("oi ❤️ tudo bem? ção"), "oi tudo bem? ção");
     }
 
     #[test]
