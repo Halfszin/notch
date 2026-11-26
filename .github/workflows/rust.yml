@@ -172,7 +172,7 @@ jobs:
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 900, 700
           Start-Sleep 4
           Shot "21-permissao"
-          Click (($w + 620) / 2 - 103) 147
+          Click (($w + 620) / 2 - 102) 191
           $null = $permProc.WaitForExit(65000)
           "agente_resposta=$(if (Test-Path "$env:TEMP\perm-resp.txt") { Get-Content "$env:TEMP\perm-resp.txt" -Raw } else { 'nenhuma' })" | Out-File ci\resultado.txt -Append
           Start-Sleep 1
@@ -248,6 +248,7 @@ jobs:
           if (-not (Select-String -Path ci\resultado.txt -Pattern 'vivo=True' -Quiet)) { exit 1 }
           if (Test-Path ci\erro.log) { Get-Content ci\erro.log; exit 1 }
           if (Select-String -Path ci\resultado.txt -Pattern '^(com|sem)_album=0$' -Quiet) { Write-Error "não achou a letra no LRCLIB"; exit 1 }
+          if (-not (Select-String -Path ci\resultado.txt -Pattern 'agente_resposta=.*"behavior":"allow"' -Quiet)) { Write-Error "o Permitir do notch não voltou para o Claude Code"; exit 1 }
 
       - name: Instalador
         timeout-minutes: 10
