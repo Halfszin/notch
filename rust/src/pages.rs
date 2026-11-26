@@ -80,6 +80,7 @@ pub fn setup(notch: &Notch) {
             }
             if let (Some(n), Some(title), true) = (weak.upgrade(), fired.first(), crate::settings::get().reminders) {
                 crate::features::toast(&n, "\u{E787}", &format!("Lembrete: {title}"), slint::Color::from_rgb_u8(0xFF, 0x9F, 0x0A), 10);
+                crate::features::sound("lembrete");
                 show();
             }
         });
@@ -96,7 +97,11 @@ pub fn setup(notch: &Notch) {
             let mut f = focus.borrow_mut();
             if let Some(end) = f.ends {
                 f.left = end.saturating_duration_since(Instant::now());
-                if f.left.is_zero() { f.ends = None; }
+                if f.left.is_zero() {
+                    f.ends = None;
+                    crate::features::toast(&n, "\u{E916}", "Foco terminou", slint::Color::from_rgb_u8(0xFF, 0x9F, 0x0A), 6);
+                    crate::features::sound("timer");
+                }
             }
             let secs = f.left.as_secs() + u64::from(f.left.subsec_nanos() > 0); // arredonda para cima
             let text = format!("{}:{:02}", secs / 60, secs % 60);

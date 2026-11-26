@@ -238,6 +238,16 @@ pub fn loopback(mut on: impl FnMut(&[f32], f32)) -> windows::core::Result<()> {
     }
 }
 
+/// Som de aviso: um .wav com esse nome em %AppData%\Orbi\sons substitui o som do Windows (como no C#).
+pub fn play_sound(name: &str) {
+    use windows::Win32::Media::Audio::{PlaySoundW, SND_ALIAS, SND_ASYNC, SND_FILENAME, SND_NODEFAULT};
+    let file = crate::store::dir().join("sons").join(format!("{name}.wav"));
+    unsafe {
+        if file.exists() && PlaySoundW(&HSTRING::from(file.as_os_str()), None, SND_FILENAME | SND_ASYNC | SND_NODEFAULT).as_bool() { return; }
+        let _ = PlaySoundW(windows::core::w!("SystemAsterisk"), None, SND_ALIAS | SND_ASYNC | SND_NODEFAULT);
+    }
+}
+
 /// Abre um app, arquivo, pasta ou site como o Explorer abriria.
 pub fn open(target: &str) {
     unsafe { ShellExecuteW(Some(HWND::default()), &HSTRING::from("open"), &HSTRING::from(target), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL) };

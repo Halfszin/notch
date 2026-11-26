@@ -27,6 +27,9 @@ pub struct Prefs {
     pub edge_pos: f32,
     /// Modo jogo (ligado pelo botão do próprio notch).
     pub game_mode: bool,
+    /// WhatsApp e Discord no notch, e sons dos avisos.
+    pub app_notifications: bool,
+    pub sounds: bool,
     /// Páginas na ordem das bolinhas (id = posição na lista PAGES) e se aparecem.
     pub pages: Vec<PageCfg>,
 }
@@ -43,7 +46,7 @@ const PAGES: [&str; 8] = ["Tocando", "Tarefas", "Foco", "Calendário", "Notas", 
 impl Default for Prefs {
     fn default() -> Self {
         Prefs {
-            battery_alerts: true, audio_alerts: true, reminders: true, lyrics: true, gradient: true, auto_update: true, compact: false, edge: 0, edge_pos: 0.5, game_mode: false,
+            battery_alerts: true, audio_alerts: true, reminders: true, lyrics: true, gradient: true, auto_update: true, compact: false, edge: 0, edge_pos: 0.5, game_mode: false, app_notifications: true, sounds: true,
             pages: (0..PAGES.len()).map(|id| PageCfg { id, visible: true }).collect(),
         }
     }
@@ -182,6 +185,8 @@ pub fn show() {
                     edge: w.get_edge(),
                     edge_pos: if w.get_edge() == get().edge { get().edge_pos } else { 0.5 },
                     game_mode: get().game_mode,
+                    app_notifications: w.get_app_notifications(),
+                    sounds: w.get_sounds(),
                     pages: get().pages,
                 };
                 crate::store::save(FILE, &prefs);
@@ -228,6 +233,8 @@ pub fn show() {
         w.set_auto_update(p.auto_update);
         w.set_compact(p.compact);
         w.set_edge(p.edge);
+        w.set_app_notifications(p.app_notifications);
+        w.set_sounds(p.sounds);
         set_page_list(w, &p.pages);
         w.set_start_with_windows(autostart());
         STATUS.with(|s| {

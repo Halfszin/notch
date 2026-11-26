@@ -18,6 +18,7 @@ thread_local! {
 
 /// Aviso rápido no notch fechado por alguns segundos.
 pub fn toast(n: &Notch, glyph: &str, text: &str, color: Color, secs: u64) {
+    n.set_toast_badge(false);
     n.set_toast_glyph(glyph.into());
     n.set_toast_text(text.into());
     n.set_toast_color(color);
@@ -28,13 +29,47 @@ pub fn toast(n: &Notch, glyph: &str, text: &str, color: Color, secs: u64) {
     }));
 }
 
+/// Aviso de app (WhatsApp, Discord): ícone branco num quadradinho da cor do app, e som.
+pub fn toast_app(n: &Notch, app: &str, text: &str) {
+    let color = if app == "WhatsApp" { Color::from_rgb_u8(0x25, 0xD3, 0x66) } else { Color::from_rgb_u8(0x58, 0x65, 0xF2) };
+    toast(n, if app == "WhatsApp" { "\u{E8BD}" } else { "\u{E8F2}" }, text, color, 5);
+    n.set_toast_badge(true);
+    sound("aviso");
+}
+
+/// Som de um aviso, se os sons estiverem ligados nas configurações.
+pub fn sound(name: &str) {
+    if crate::settings::get().sounds { crate::winapi::play_sound(name); }
+}
+
 pub fn setup(notch: &Notch) {
+    app_notifications(notch);
     battery_and_audio(notch);
     calendar(notch);
     notes(notch);
     clipboard(notch);
     system(notch);
     shortcuts(notch);
+}
+
+// ---------- WhatsApp e Discord ----------
+
+fn app_notifications(notch: &Notch) {
+    let weak = notch.as_weak();
+    std::thread::spawn(move || {
+        let mut watcher = crate::notifications::Watcher::new();
+        loop {
+            for (app, title, body) in watcher.poll() {
+                let weak = weak.clone();
+                let _ = slint::invoke_from_event_loop(move || {
+                    if !crate::settings::get().app_notifications { return; }
+                    let Some(n) = weak.upgrade() else { return };
+                    toast_app(&n, app, &if body.is_empty() { title } else { format!("{title}: {body}") });
+                });
+            }
+            std::thread::sleep(Duration::from_secs(2));
+        }
+    });
 }
 
 // ---------- bateria (carregador, bateria fraca) e fone ----------

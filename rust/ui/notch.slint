@@ -316,6 +316,8 @@ export component Notch inherits Window {
     in property <string> toast-text;
     in property <string> toast-glyph;
     in property <color> toast-color: white;
+    // Aviso de app: o ícone vai branco num quadradinho da cor do app.
+    in property <bool> toast-badge;
     out property <length> toast-width: 360px;
     out property <length> toast-height: 36px;
 
@@ -442,7 +444,14 @@ export component Notch inherits Window {
             spacing: 8px;
             padding-left: 16px;
             padding-right: 16px;
-            Text { text: root.toast-glyph; font-family: "Segoe MDL2 Assets"; font-size: 14px; color: root.toast-color; vertical-alignment: center; }
+            if !root.toast-badge : Text { text: root.toast-glyph; font-family: "Segoe MDL2 Assets"; font-size: 14px; color: root.toast-color; vertical-alignment: center; }
+            if root.toast-badge : VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 22px; height: 22px; border-radius: 7px; background: root.toast-color;
+                    Text { text: root.toast-glyph; font-family: "Segoe MDL2 Assets"; font-size: 12px; color: white; horizontal-alignment: center; vertical-alignment: center; }
+                }
+            }
             Text { text: root.toast-text; color: white; font-size: 13px; font-weight: 600; vertical-alignment: center; overflow: elide; }
         }
 
@@ -961,6 +970,8 @@ export component Settings inherits Window {
     in-out property <bool> auto-update: true;
     in-out property <bool> compact;
     in-out property <int> edge;
+    in-out property <bool> app-notifications: true;
+    in-out property <bool> sounds: true;
     in property <string> version;
     in property <string> update-status;
     in property <bool> update-ready;
@@ -1192,6 +1203,20 @@ export component Settings inherits Window {
                                 title: "Saída de som";
                                 sub: "Avisa quando o som muda para o fone ou para as caixas.";
                                 checked <=> root.audio-alerts;
+                                toggled => { root.changed(); }
+                            }
+                            Divider { }
+                            SwitchRow {
+                                title: "WhatsApp e Discord no notch";
+                                sub: "Mostra as mensagens que chegam, lendo as notificações do próprio Windows. Nada sai do seu PC.";
+                                checked <=> root.app-notifications;
+                                toggled => { root.changed(); }
+                            }
+                            Divider { }
+                            SwitchRow {
+                                title: "Sons do Orbi";
+                                sub: "Mensagens, lembretes e fim do foco. Para trocar, ponha .wav na pasta sons (aviso, lembrete, timer).";
+                                checked <=> root.sounds;
                                 toggled => { root.changed(); }
                             }
                             Divider { }
