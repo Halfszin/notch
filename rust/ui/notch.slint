@@ -193,6 +193,8 @@ component AudioBars inherits HorizontalLayout {
     // Força de cada faixa do som (graves → agudos, 0 a 1). Vazio = só a animação (topo do notch aberto).
     in property <[float]> bands;
     in property <color> tint: white;
+    // Altura onde as barrinhas ficam centradas.
+    in property <length> box: 16px;
     property <duration> t: animation-tick();
     spacing: 2px;
     alignment: center;
@@ -200,7 +202,7 @@ component AudioBars inherits HorizontalLayout {
         width: 3px;
         height: root.bands.length > 0 ? 3px + 11px * min(1, root.bands[i])
             : root.playing ? 4px + 10px * abs(sin(root.t / 1ms * 0.4deg + i * 70deg)) : 4px;
-        y: (16px - self.height) / 2;
+        y: (root.box - self.height) / 2;
         border-radius: 1.5px;
         background: root.tint;
     }
@@ -246,13 +248,14 @@ export component Notch inherits Window {
     callback drag-move();
     callback drag-end();
     // Como no Orbi em C#: barrinhas só enquanto toca; sem música o notch volta ao tamanho de só anel + hora.
-    out property <length> closed-width: root.side ? (root.game-mode ? 6px : 34px) : root.game-mode ? 70px : root.playing ? 160px : 132px;
+    // Topo: 120 × 30, como no Orbi em C# (com ou sem música; as barrinhas cabem dentro).
+    out property <length> closed-width: root.side ? (root.game-mode ? 6px : 34px) : root.game-mode ? 70px : 120px;
     // Visualizador (como o Wallpaper Engine): 4 faixas do som e o grave, que faz o notch fechado pulsar.
     in property <[float]> bands: [0, 0, 0, 0, 0];
     in property <float> level;
     // Batida (0 a 1): salta no bumbo e cai rápido.
     in property <float> pulse;
-    out property <length> closed-height: root.game-mode ? (root.side ? 70px : 6px) : !root.side ? 32px : root.playing ? 116px : 92px;
+    out property <length> closed-height: root.game-mode ? (root.side ? 70px : 6px) : !root.side ? 30px : root.playing ? 116px : 92px;
 
     in-out property <bool> adding;
     // O Rust decide pela posição do mouse (não depende do aviso de "mouse em cima" da janela).
@@ -373,7 +376,7 @@ export component Notch inherits Window {
         transform-origin: root.edge == 1 ? { x: 0, y: self.height / 2 } : root.edge == 2 ? { x: self.width, y: self.height / 2 } : { x: self.width / 2, y: 0 };
         x: root.edge == 1 ? 0 : root.edge == 2 ? root.width - self.width : (root.width - self.width) / 2;
         y: root.side ? (root.height - self.height) / 2 : 0;
-        property <length> r: root.open ? 30px : root.game-mode && !root.toasting ? 3px : 16px;
+        property <length> r: root.open ? 30px : root.game-mode && !root.toasting ? 3px : root.side ? 16px : 28px;
         border-top-left-radius: root.edge == 2 ? self.r : 0;
         border-top-right-radius: root.edge == 1 ? self.r : 0;
         border-bottom-left-radius: root.edge != 1 ? self.r : 0;
@@ -412,18 +415,19 @@ export component Notch inherits Window {
             animate opacity { duration: 150ms; }
             alignment: center;
             spacing: 0px; // os 6 px entre anel, barrinhas e hora ficam dentro da caixa das barrinhas
-            padding-top: 8px;
-            padding-bottom: 8px;
-            Ring { value: root.battery; tint: root.ring-color; bolt: root.charging; }
+            // Anel de 18 px e hora centrados na mesma linha (medidas do Orbi em C#).
+            padding-top: 6px;
+            padding-bottom: 6px;
+            Ring { size: 18px; value: root.battery; tint: root.ring-color; bolt: root.charging; }
             // Barrinhas entram e saem encolhendo junto com o notch (antes sumiam de uma vez e o anel pulava).
             Rectangle {
                 // 5 barrinhas de 3 px + 4 vãos de 2 px = 23 px, com 7 px de folga de cada lado.
                 width: root.playing ? 23px + 14px : 6px;
                 animate width { duration: 300ms; easing: ease-out; }
                 clip: true;
-                closed-bars := AudioBars { x: 7px; width: 23px; playing: true; bands: root.bands; tint: #30D158; opacity: root.playing ? 1 : 0; animate opacity { duration: 200ms; } }
+                closed-bars := AudioBars { x: 7px; width: 23px; box: 18px; playing: true; bands: root.bands; tint: #30D158; opacity: root.playing ? 1 : 0; animate opacity { duration: 200ms; } }
             }
-            Text { text: root.closed-text; color: root.focus-running ? #FF9F0A : white; font-size: 13px; font-weight: 600; vertical-alignment: center; }
+            Text { height: 18px; text: root.closed-text; color: root.focus-running ? #FF9F0A : white; font-size: 13px; font-weight: 600; vertical-alignment: center; }
         }
 
         // ---- aviso rápido ----
