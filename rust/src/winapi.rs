@@ -285,6 +285,22 @@ pub fn app_icon(aumid: &str, size: i32) -> Option<(u32, u32, Vec<u8>)> {
     }
 }
 
+/// Janela do Windows para escolher um app/arquivo (ou uma pasta); devolve o caminho escolhido.
+pub fn pick_path(folder: bool) -> Option<String> {
+    use windows::Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_ALL};
+    use windows::Win32::UI::Shell::{FileOpenDialog, IFileOpenDialog, FOS_PICKFOLDERS, SIGDN_FILESYSPATH};
+    unsafe {
+        let dlg: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_ALL).ok()?;
+        if folder { dlg.SetOptions(dlg.GetOptions().ok()? | FOS_PICKFOLDERS).ok()?; }
+        let _ = dlg.SetTitle(&HSTRING::from(if folder { "Escolher pasta" } else { "Escolher app ou arquivo" }));
+        dlg.Show(None).ok()?; // cancelou: erro, sem atalho
+        let p = dlg.GetResult().ok()?.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
+        let s = p.to_string().ok();
+        CoTaskMemFree(Some(p.0 as _));
+        s
+    }
+}
+
 /// Abre um app, arquivo, pasta ou site como o Explorer abriria.
 pub fn open(target: &str) {
     unsafe { ShellExecuteW(Some(HWND::default()), &HSTRING::from("open"), &HSTRING::from(target), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL) };

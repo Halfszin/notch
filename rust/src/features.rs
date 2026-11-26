@@ -273,36 +273,98 @@ fn system(notch: &Notch) {
 
 // ---------- atalhos (mesmo atalhos.json do Orbi em C#) ----------
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, serde::Serialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 struct Shortcut { name: String, target: String }
 
 fn shortcuts(notch: &Notch) {
-    let user: Vec<Shortcut> = store::load("atalhos.json");
-    let mut items = vec![
-        ShortcutItem { name: "Gravar tela".into(), glyph: "\u{E714}".into(), tint: RED },
-        ShortcutItem { name: "Print".into(), glyph: "\u{E722}".into(), tint: RED },
-    ];
-    for s in &user {
-        let is_url = s.target.starts_with("http://") || s.target.starts_with("https://");
-        let is_dir = std::path::Path::new(&s.target).is_dir();
-        items.push(ShortcutItem {
-            name: s.name.clone().into(),
-            glyph: if is_url { "\u{E774}" } else if is_dir { "\u{E8B7}" } else { "\u{E7AC}" }.into(),
-            tint: if is_url { Color::from_rgb_u8(0x0A, 0x84, 0xFF) } else if is_dir { ORANGE } else { WHITE },
-        });
-    }
-    notch.set_shortcuts(ModelRc::new(VecModel::from(items)));
-    notch.on_open_shortcut(move |i| match i {
-        0 => winapi::press_keys(&[0x5B, 0x10, 0x52]), // Win+Shift+R: gravação da Ferramenta de Captura
-        1 => winapi::open("ms-screenclip:"),
-        _ => if let Some(s) = user.get(i as usize - 2) { winapi::open(&s.target) },
+    // Lista do atalhos.json (a mesma do Orbi em C#); os dois primeiros são fixos e o último é o "Adicionar".
+    let user: Rc<RefCell<Vec<Shortcut>>> = Rc::new(RefCell::new(store::load("atalhos.json")));
+    let draw = {
+        let (weak, user) = (notch.as_weak(), user.clone());
+        Rc::new(move || {
+            let Some(n) = weak.upgrade() else { return };
+            let mut items = vec![
+                ShortcutItem { name: "Gravar tela".into(), glyph: "\u{E714}".into(), tint: RED },
+                ShortcutItem { name: "Print".into(), glyph: "\u{E722}".into(), tint: RED },
+            ];
+            for s in user.borrow().iter() {
+                let is_url = s.target.starts_with("http://") || s.target.starts_with("https://");
+                let is_dir = std::path::Path::new(&s.target).is_dir();
+                items.push(ShortcutItem {
+                    name: s.name.clone().into(),
+                    glyph: if is_url { "\u{E774}" } else if is_dir { "\u{E8B7}" } else { "\u{E7AC}" }.into(),
+                    tint: if is_url { Color::from_rgb_u8(0x0A, 0x84, 0xFF) } else if is_dir { ORANGE } else { WHITE },
+                });
+            }
+            items.push(ShortcutItem { name: "Adicionar".into(), glyph: "\u{E710}".into(), tint: Color::from_rgb_u8(0x8E, 0x8E, 0x93) });
+            n.set_shortcuts(ModelRc::new(VecModel::from(items)));
+        })
+    };
+    draw();
+    let add = {
+        let (user, draw) = (user.clone(), draw.clone());
+        Rc::new(move |name: String, target: String| {
+            user.borrow_mut().push(Shortcut { name, target });
+            store::save("atalhos.json", &*user.borrow());
+            draw();
+        })
+    };
+    let (weak, u) = (notch.as_weak(), user.clone());
+    notch.on_open_shortcut(move |i| {
+        let count = u.borrow().len() as i32;
+        match i {
+            0 => winapi::press_keys(&[0x5B, 0x10, 0x52]), // Win+Shift+R: gravação da Ferramenta de Captura
+            1 => winapi::open("ms-screenclip:"),
+            _ if i == count + 2 => { if let Some(n) = weak.upgrade() { n.set_sc_adding(true); } }
+            _ => if let Some(s) = u.borrow().get(i as usize - 2) { winapi::open(&s.target) },
+        }
     });
+    let (u, d) = (user.clone(), draw.clone());
+    notch.on_remove_shortcut(move |i| {
+        let k = i as usize;
+        if k < 2 || k - 2 >= u.borrow().len() { return; } // os fixos e o "Adicionar" não saem
+        u.borrow_mut().remove(k - 2);
+        store::save("atalhos.json", &*u.borrow());
+        d();
+    });
+    for folder in [false, true] {
+        let (weak, add) = (notch.as_weak(), add.clone());
+        let pick = move || {
+            if let Some(n) = weak.upgrade() { n.set_sc_adding(false); }
+            let Some(path) = winapi::pick_path(folder) else { return };
+            let p = std::path::Path::new(&path);
+            let name = p.file_stem().or(p.file_name()).map(|s| s.to_string_lossy().into_owned()).unwrap_or(path.clone());
+            add(name, path);
+        };
+        if folder { notch.on_add_shortcut_folder(pick); } else { notch.on_add_shortcut_file(pick); }
+    }
+    let (weak, add) = (notch.as_weak(), add.clone());
+    notch.on_add_shortcut_site(move |text| {
+        if let Some(n) = weak.upgrade() { n.set_sc_adding(false); n.set_adding(false); }
+        if let Some((name, url)) = site(&text) { add(name, url); }
+    });
+}
+
+/// Endereço digitado → (nome curto, endereço completo). "github.com/x" vira ("github.com", "https://github.com/x").
+pub fn site(text: &str) -> Option<(String, String)> {
+    let t = text.trim();
+    if t.is_empty() || t.contains(' ') || !t.contains('.') { return None; }
+    let url = if t.starts_with("http://") || t.starts_with("https://") { t.to_string() } else { format!("https://{t}") };
+    let host = url.split("://").nth(1)?.split(['/', '?', '#']).next()?.to_string();
+    Some((host.strip_prefix("www.").unwrap_or(&host).to_string(), url))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::month_grid;
+    use super::{month_grid, site};
+
+    #[test]
+    fn endereco_vira_atalho() {
+        assert_eq!(site("www.youtube.com/watch?v=1"), Some(("youtube.com".into(), "https://www.youtube.com/watch?v=1".into())));
+        assert_eq!(site(" http://exemplo.com.br "), Some(("exemplo.com.br".into(), "http://exemplo.com.br".into())));
+        assert_eq!(site("não é site"), None);
+    }
 
     #[test]
     fn calendario_de_novembro_2026() {

@@ -355,6 +355,11 @@ export component Notch inherits Window {
     // atalhos
     in property <[ShortcutItem]> shortcuts;
     callback open-shortcut(int);
+    callback remove-shortcut(int);
+    callback add-shortcut-file();
+    callback add-shortcut-folder();
+    callback add-shortcut-site(string);
+    in-out property <bool> sc-adding;
 
     // foco
     in property <string> focus-text: "25:00";
@@ -415,7 +420,7 @@ export component Notch inherits Window {
             animate opacity { duration: 150ms; delay: root.open || root.toasting ? 0ms : 200ms; }
             alignment: center;
             spacing: 6px;
-            HorizontalLayout { alignment: center; Ring { value: root.battery; tint: root.ring-color; bolt: root.charging; } }
+            if root.has-battery : HorizontalLayout { alignment: center; Ring { value: root.battery; tint: root.ring-color; bolt: root.charging; } }
             if root.playing : HorizontalLayout { alignment: center; AudioBars { playing: true; bands: root.bands; tint: #30D158; } }
             Text { text: root.side-text; color: root.focus-running ? #FF9F0A : white; font-size: 13px; font-weight: 600; horizontal-alignment: center; }
         }
@@ -428,7 +433,8 @@ export component Notch inherits Window {
             // Anel de 18 px e hora centrados na mesma linha (medidas do Orbi em C#).
             padding-top: 6px;
             padding-bottom: 6px;
-            Ring { size: 18px; value: root.battery; tint: root.ring-color; bolt: root.charging; }
+            // PC sem bateria (desktop): sem o anel, fica só a hora (e as barrinhas com música).
+            if root.has-battery : Ring { size: 18px; value: root.battery; tint: root.ring-color; bolt: root.charging; }
             // Barrinhas entram e saem encolhendo junto com o notch (antes sumiam de uma vez e o anel pulava).
             Rectangle {
                 // 5 barrinhas de 3 px + 4 vãos de 2 px = 23 px, com 7 px de folga de cada lado.
@@ -502,7 +508,7 @@ export component Notch inherits Window {
                 HorizontalLayout {
                     alignment: center;
                     spacing: 8px;
-                    Ring { value: root.battery; tint: root.ring-color; bolt: root.charging; y: 4px; }
+                    if root.has-battery : Ring { value: root.battery; tint: root.ring-color; bolt: root.charging; y: 4px; }
                     Text { text: root.date-text; color: white; font-size: 12.5px; vertical-alignment: center; }
                     Text { text: root.clock; color: white; font-size: 12.5px; font-weight: 700; vertical-alignment: center; }
                 }
@@ -795,10 +801,14 @@ export component Notch inherits Window {
                     spacing: 10px;
                     HorizontalLayout {
                         alignment: space-around;
-                        for g in [
+                        // PC sem bateria: só CPU e memória.
+                        for g in root.has-battery ? [
                             { v: root.cpu, t: root.cpu-text, n: "CPU", d: "processador", c: root.cpu > 0.85 ? #FF453A : #30D158 },
                             { v: root.ram, t: root.ram-text, n: "Memória", d: root.ram-detail, c: root.ram > 0.9 ? #FF453A : #0A84FF },
-                            { v: root.has-battery ? root.battery : 0, t: root.has-battery ? round(root.battery * 100) + "%" : "—", n: "Bateria", d: root.battery-detail, c: root.ring-color },
+                            { v: root.battery, t: round(root.battery * 100) + "%", n: "Bateria", d: root.battery-detail, c: root.ring-color },
+                        ] : [
+                            { v: root.cpu, t: root.cpu-text, n: "CPU", d: "processador", c: root.cpu > 0.85 ? #FF453A : #30D158 },
+                            { v: root.ram, t: root.ram-text, n: "Memória", d: root.ram-detail, c: root.ram > 0.9 ? #FF453A : #0A84FF },
                         ] : VerticalLayout {
                             spacing: 4px;
                             alignment: center;
@@ -828,6 +838,21 @@ export component Notch inherits Window {
                     grid := VerticalLayout {
                         alignment: start;
                         spacing: 8px;
+                        // Adicionar: app/arquivo ou pasta (janela do Windows) ou site (digitado aqui).
+                        if root.sc-adding : HorizontalLayout {
+                            spacing: 8px;
+                            height: 32px;
+                            Pill { glyph: "\u{E7AC}"; label: "App ou arquivo"; clicked => { root.add-shortcut-file(); } }
+                            Pill { glyph: "\u{E8B7}"; label: "Pasta"; clicked => { root.add-shortcut-folder(); } }
+                            site-edit := LineEdit {
+                                placeholder-text: "site (ex.: youtube.com)";
+                                horizontal-stretch: 1;
+                                font-size: 12px;
+                                init => { root.adding = true; root.want-keyboard(); }
+                                accepted(text) => { root.add-shortcut-site(text); }
+                            }
+                            IconButton { glyph: "\u{E711}"; size: 11px; tint: #8E8E93; clicked => { root.sc-adding = false; root.adding = false; } }
+                        }
                         for row in ceil(root.shortcuts.length / 6) : HorizontalLayout {
                             spacing: 8px;
                             alignment: start;
@@ -847,7 +872,12 @@ export component Notch inherits Window {
                                     }
                                     Text { text: root.shortcuts[k].name; color: #AEAEB2; font-size: 11px; horizontal-alignment: center; overflow: elide; }
                                 }
-                                sc-ta := TouchArea { clicked => { root.open-shortcut(k); } mouse-cursor: pointer; }
+                                // Clique abre; botão direito remove (só os seus atalhos).
+                                sc-ta := TouchArea {
+                                    clicked => { root.open-shortcut(k); }
+                                    pointer-event(e) => { if (e.button == PointerEventButton.right && e.kind == PointerEventKind.up) { root.remove-shortcut(k); } }
+                                    mouse-cursor: pointer;
+                                }
                             }
                         }
                     }
