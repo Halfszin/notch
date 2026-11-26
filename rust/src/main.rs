@@ -72,7 +72,8 @@ fn run() -> Result<(), slint::PlatformError> {
         features::setup(&notch);
         settings::setup(&notch);
         let p = settings::get();
-        agents::setup(&notch, p.agent_port, p.agent_token);
+        // ORBI_SEM_AGENTES=1: abre sem o servidor dos agentes (diagnóstico do CI).
+        if std::env::var_os("ORBI_SEM_AGENTES").is_none() { agents::setup(&notch, p.agent_port, p.agent_token); }
         settings::refresh_agents(&notch);
         features::chat(&notch);
         features::weather(&notch);

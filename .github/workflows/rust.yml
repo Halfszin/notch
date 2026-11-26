@@ -38,10 +38,13 @@ jobs:
 
       - name: Abrir o Orbi (Rust) e tirar prints
         shell: pwsh
+        env:
+          ORBI_SEM_AGENTES: "1"  # diagnóstico: a máquina do teste caía 30 s depois de abrir; isola o servidor dos agentes
         run: |
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
           New-Item -ItemType Directory ci -Force | Out-Null
           function Shot($name) {
+            Write-Host "print: $name ($([int]((Get-Date) - $inicio).TotalSeconds) s)"
             $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
             $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
             [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
@@ -51,6 +54,8 @@ jobs:
           New-Item -ItemType Directory run -Force | Out-Null
           Copy-Item target\release\orbi.exe run\orbi.exe
           $exe = "run\orbi.exe"
+          $inicio = Get-Date
+          Write-Host "começou"
           "tamanho=$([math]::Round((Get-Item $exe).Length / 1MB, 1)) MB" | Out-File ci\resultado.txt
           # Tarefas de exemplo (mesmo arquivo do Orbi em C#): 4 de 5 feitas.
           New-Item -ItemType Directory "$env:APPDATA\Orbi" -Force | Out-Null
@@ -65,6 +70,7 @@ jobs:
           # Clima de uma cidade (o Orbi completa o resto do arquivo ao abrir).
           '{"city":"São Paulo, Brasil","lat":-23.55,"lon":-46.63}' | Set-Content "$env:APPDATA\Orbi\rust-config.json" -Encoding utf8
           "portas_4783x_antes=$((Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -ge 47821 -and $_.LocalPort -le 47845 } | ForEach-Object { "$($_.LocalAddress):$($_.LocalPort)" }) -join ' ')" | Out-File ci\resultado.txt -Append
+          Write-Host "letra ok; abrindo o Orbi (ORBI_SEM_AGENTES=$env:ORBI_SEM_AGENTES)"
           # --startup: abre como ao ligar o PC (só o notch, sem a tela de configurações).
           $p = Start-Process $exe -ArgumentList "--startup" -PassThru
           Start-Sleep 6
