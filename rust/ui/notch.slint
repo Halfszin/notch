@@ -4,6 +4,7 @@ import { LineEdit, TextEdit } from "std-widgets.slint";
 export struct TaskRow { title: string, done: bool, due: string }
 export struct DayCell { day: int, in-month: bool, today: bool }
 export struct ShortcutItem { name: string, glyph: string, tint: color }
+export struct ChatMsg { user: bool, text: string }
 export struct AgentRow { project: string, status: string, busy: bool }
 export struct PageEntry { name: string, visible: bool, fixed: bool }
 
@@ -121,6 +122,25 @@ component IconButton inherits Rectangle {
         clicked => { root.clicked(); }
         mouse-cursor: pointer;
     }
+}
+
+// Medidor redondo da página Sistema (medidas do Orbi em C#: 74 px, traço 7, pontas redondas).
+component Gauge inherits VerticalLayout {
+    in property <float> value;
+    in property <string> text;
+    in property <string> name;
+    in property <string> detail;
+    in property <color> tint;
+    spacing: 4px;
+    alignment: center;
+    Rectangle {
+        width: 74px;
+        height: 74px;
+        Ring { width: 74px; height: 74px; size: 74px; stroke: 7px; value: root.value; tint: root.tint; }
+        Text { text: root.text; color: white; font-size: 16px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+    }
+    Text { text: root.name; color: white; font-size: 12px; horizontal-alignment: center; }
+    Text { text: root.detail; color: #8E8E93; font-size: 10.5px; horizontal-alignment: center; }
 }
 
 // Volume: só o ícone; com o mouse em cima ele se abre numa barrinha (clicar, arrastar ou rodinha).
@@ -262,7 +282,7 @@ export component Notch inherits Window {
     // O Rust decide pela posição do mouse (não depende do aviso de "mouse em cima" da janela).
     in property <bool> hovered;
     // Pedido de permissão do Claude Code abre o notch sozinho (menos no modo jogo).
-    out property <bool> open: !root.dragging && (root.hovered || ta.has-hover || root.adding || root.notes-focused || (root.perm-visible && !root.game-mode));
+    out property <bool> open: !root.dragging && (root.hovered || ta.has-hover || root.adding || root.notes-focused || root.chat-focused || (root.perm-visible && !root.game-mode));
     callback quit();
     callback open-settings();
     in property <bool> gradient-enabled: true;
@@ -305,6 +325,17 @@ export component Notch inherits Window {
     property <int> pages: root.order.length;
     property <[string]> titles: ["Tocando", "Tarefas", "Foco", "Calendário", "Notas", "Copiados", "Sistema", "Atalhos", "Agentes"];
     property <[string]> subtitles: ["agora", "hoje", "timer", "do mês", "rápidas", "recentes", "agora", "rápidos", "Claude Code"];
+
+    in property <string> weather-glyph;
+    in property <string> weather-text;
+
+    // Chat com o Claude (ícone do Claude no topo; troca a página pela conversa).
+    in-out property <bool> chat-open;
+    in property <[ChatMsg]> chat-messages;
+    in property <bool> chat-busy;
+    in-out property <bool> chat-focused;
+    callback chat-send(string);
+    callback chat-clear();
 
     // Agentes do Claude Code (página 8): sessões, limites do plano e o pedido de permissão da vez.
     in property <[AgentRow]> agent-rows;
@@ -388,6 +419,10 @@ export component Notch inherits Window {
 
 
     // Bateria: verde (carregando ou acima de 50%), amarelo (21–50%), vermelho (20% ou menos).
+    // Temperatura do PC em °C (-1 = o Windows não informa). Sem bateria, o anel do notch mostra ela.
+    in property <float> temp: -1;
+    property <color> temp-color: root.temp < 60 ? #30D158 : root.temp < 80 ? #FFD60A : #FF453A;
+    property <bool> show-temp: !root.has-battery && root.temp >= 0;
     property <color> ring-color: !root.has-battery ? #8E8E93 : root.charging || root.battery > 0.5 ? #30D158 : root.battery > 0.2 ? #FFD60A : #FF453A;
     property <bool> music-glow: root.page == 0 && root.has-cover && root.gradient-enabled;
 
@@ -438,6 +473,7 @@ export component Notch inherits Window {
             alignment: center;
             spacing: 6px;
             if root.has-battery : HorizontalLayout { alignment: center; Ring { value: root.battery; tint: root.ring-color; bolt: root.charging; } }
+            if root.show-temp : HorizontalLayout { alignment: center; Ring { value: root.temp / 100; tint: root.temp-color; } }
             if root.playing : HorizontalLayout { alignment: center; AudioBars { playing: true; bands: root.bands; tint: #30D158; } }
             Text { text: root.side-text; color: root.focus-running ? #FF9F0A : white; font-size: 13px; font-weight: 600; horizontal-alignment: center; }
         }
@@ -452,6 +488,7 @@ export component Notch inherits Window {
             padding-bottom: 6px;
             // PC sem bateria (desktop): sem o anel, fica só a hora (e as barrinhas com música).
             if root.has-battery : Ring { size: 18px; value: root.battery; tint: root.ring-color; bolt: root.charging; }
+            if root.show-temp : Ring { size: 18px; value: root.temp / 100; tint: root.temp-color; }
             // Barrinhas entram e saem encolhendo junto com o notch (antes sumiam de uma vez e o anel pulava).
             Rectangle {
                 // 5 barrinhas de 3 px + 4 vãos de 2 px = 23 px, com 7 px de folga de cada lado.
@@ -502,14 +539,20 @@ export component Notch inherits Window {
             HorizontalLayout {
                 height: 24px;
                 spacing: 8px;
-                if root.page != 0 : HorizontalLayout {
+                if root.chat-open : HorizontalLayout {
+                    width: 150px;
+                    spacing: 4px;
+                    Text { text: "Chat"; color: white; font-size: 14px; font-weight: 700; vertical-alignment: center; }
+                    Text { text: "Claude"; color: #D97757; font-size: 14px; font-weight: 700; vertical-alignment: center; }
+                }
+                if root.page != 0 && !root.chat-open : HorizontalLayout {
                     width: 150px;
                     spacing: 4px;
                     Text { text: root.titles[root.page]; color: white; font-size: 14px; font-weight: 700; vertical-alignment: center; }
                     Text { text: root.subtitles[root.page]; color: #30D158; font-size: 14px; font-weight: 700; vertical-alignment: center; }
                 }
                 // Música: dois botões no lugar do título — só o player ou o player com a letra ao lado.
-                if root.page == 0 : HorizontalLayout {
+                if root.page == 0 && !root.chat-open : HorizontalLayout {
                     width: 150px;
                     spacing: 10px;
                     alignment: start;
@@ -526,6 +569,13 @@ export component Notch inherits Window {
                     alignment: center;
                     spacing: 8px;
                     if root.has-battery : Ring { value: root.battery; tint: root.ring-color; bolt: root.charging; y: 4px; }
+                    if root.show-temp : Ring { value: root.temp / 100; tint: root.temp-color; y: 4px; }
+                    // Clima da cidade escolhida nas configurações.
+                    if root.weather-text != "" : HorizontalLayout {
+                        spacing: 4px;
+                        Text { text: root.weather-glyph; font-family: "Segoe UI Symbol"; color: white; font-size: 13px; vertical-alignment: center; }
+                        Text { text: root.weather-text; color: white; font-size: 12.5px; vertical-alignment: center; }
+                    }
                     Text { text: root.date-text; color: white; font-size: 12.5px; vertical-alignment: center; }
                     Text { text: root.clock; color: white; font-size: 12.5px; font-weight: 700; vertical-alignment: center; }
                 }
@@ -536,6 +586,13 @@ export component Notch inherits Window {
                     // Barrinhas só com música tocando (parado eram só 4 pontinhos sem uso).
                     if root.playing : AudioBars { playing: true; }
                     // Na fonte de ícones a engrenagem desenha menor que o X: tamanhos diferentes para ficarem iguais na tela.
+                    // Chat com o Claude: o asterisco laranja do Claude (como no coucou).
+                    Rectangle {
+                        width: 26px; height: 24px; border-radius: 12px;
+                        background: root.chat-open ? #D9775733 : chat-ta.has-hover ? #FFFFFF18 : transparent;
+                        Text { text: "✳"; font-family: "Segoe UI Symbol"; font-size: 15px; color: #D97757; horizontal-alignment: center; vertical-alignment: center; }
+                        chat-ta := TouchArea { mouse-cursor: pointer; clicked => { root.chat-open = !root.chat-open; } }
+                    }
                     // Modo jogo: verde quando ligado.
                     IconButton { glyph: "\u{E7FC}"; size: 14px; tint: root.game-mode ? #30D158 : #AEAEB2; width: 26px; height: 24px; clicked => { root.game-mode = !root.game-mode; root.game-toggled(); } }
                     IconButton { glyph: "\u{E713}"; size: 13px; tint: #AEAEB2; width: 26px; height: 24px; clicked => { root.open-settings(); } }
@@ -546,7 +603,7 @@ export component Notch inherits Window {
             Rectangle {
                 vertical-stretch: 1;
                 // ---- página: música ----
-                if root.page == 0 : HorizontalLayout {
+                if root.page == 0 && !root.chat-open : HorizontalLayout {
                     spacing: 16px;
                     if !(root.lyrics-on && root.has-lyrics) : Avatar { width: root.compact ? 96px : 140px; look-x: root.look-x; look-y: root.look-y; pulse: root.playing ? root.level : 0; }
                     VerticalLayout {
@@ -627,7 +684,7 @@ export component Notch inherits Window {
                 }
 
                 // ---- página: tarefas (como o "4/5 Task Done Today" do Nusa) ----
-                if root.page == 1 : HorizontalLayout {
+                if root.page == 1 && !root.chat-open : HorizontalLayout {
                     spacing: 18px;
                     VerticalLayout {
                         width: 210px;
@@ -691,7 +748,7 @@ export component Notch inherits Window {
                 }
 
                 // ---- página: foco ----
-                if root.page == 2 : VerticalLayout {
+                if root.page == 2 && !root.chat-open : VerticalLayout {
                     alignment: center;
                     spacing: 10px;
                     Text { text: root.focus-text; color: root.focus-running ? #FF9F0A : white; font-size: 56px; font-weight: 300; horizontal-alignment: center; }
@@ -716,7 +773,7 @@ export component Notch inherits Window {
                 }
 
                 // ---- página: calendário ----
-                if root.page == 3 : VerticalLayout {
+                if root.page == 3 && !root.chat-open : VerticalLayout {
                     // Compacto: linhas mais baixas para as 6 semanas caberem acima das bolinhas.
                     spacing: root.compact ? 1px : 4px;
                     HorizontalLayout {
@@ -770,7 +827,7 @@ export component Notch inherits Window {
                 }
 
                 // ---- página: notas rápidas ----
-                if root.page == 4 : Rectangle {
+                if root.page == 4 && !root.chat-open : Rectangle {
                     border-radius: 14px;
                     background: #141416;
                     notes-edit := TextEdit {
@@ -786,7 +843,7 @@ export component Notch inherits Window {
                 }
 
                 // ---- página: área de transferência ----
-                if root.page == 5 : VerticalLayout {
+                if root.page == 5 && !root.chat-open : VerticalLayout {
                     spacing: 6px;
                     HorizontalLayout {
                         height: 18px;
@@ -813,32 +870,16 @@ export component Notch inherits Window {
                 }
 
                 // ---- página: sistema ----
-                if root.page == 6 : VerticalLayout {
+                if root.page == 6 && !root.chat-open : VerticalLayout {
                     alignment: center;
                     spacing: 10px;
                     HorizontalLayout {
                         alignment: space-around;
-                        // PC sem bateria: só CPU e memória.
-                        for g in root.has-battery ? [
-                            { v: root.cpu, t: root.cpu-text, n: "CPU", d: "processador", c: root.cpu > 0.85 ? #FF453A : #30D158 },
-                            { v: root.ram, t: root.ram-text, n: "Memória", d: root.ram-detail, c: root.ram > 0.9 ? #FF453A : #0A84FF },
-                            { v: root.battery, t: round(root.battery * 100) + "%", n: "Bateria", d: root.battery-detail, c: root.ring-color },
-                        ] : [
-                            { v: root.cpu, t: root.cpu-text, n: "CPU", d: "processador", c: root.cpu > 0.85 ? #FF453A : #30D158 },
-                            { v: root.ram, t: root.ram-text, n: "Memória", d: root.ram-detail, c: root.ram > 0.9 ? #FF453A : #0A84FF },
-                        ] : VerticalLayout {
-                            spacing: 4px;
-                            alignment: center;
-                            // Medidas do Orbi em C# (74 px, traço 7, pontas redondas).
-                            Rectangle {
-                                width: 74px;
-                                height: 74px;
-                                Ring { width: 74px; height: 74px; size: 74px; stroke: 7px; value: g.v; tint: g.c; }
-                                Text { text: g.t; color: white; font-size: 16px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
-                            }
-                            Text { text: g.n; color: white; font-size: 12px; horizontal-alignment: center; }
-                            Text { text: g.d; color: #8E8E93; font-size: 10.5px; horizontal-alignment: center; }
-                        }
+                        Gauge { value: root.cpu; text: root.cpu-text; name: "CPU"; detail: "processador"; tint: root.cpu > 0.85 ? #FF453A : #30D158; }
+                        Gauge { value: root.ram; text: root.ram-text; name: "Memória"; detail: root.ram-detail; tint: root.ram > 0.9 ? #FF453A : #0A84FF; }
+                        // Bateria só em notebook; temperatura quando o Windows informa.
+                        if root.has-battery : Gauge { value: root.battery; text: round(root.battery * 100) + "%"; name: "Bateria"; detail: root.battery-detail; tint: root.ring-color; }
+                        if root.temp >= 0 : Gauge { value: root.temp / 100; text: round(root.temp) + "°"; name: "Temperatura"; detail: "do PC"; tint: root.temp-color; }
                     }
                     // Ícone do fone na fonte de ícones (na fonte de texto ele virava um quadradinho).
                     HorizontalLayout {
@@ -850,7 +891,7 @@ export component Notch inherits Window {
                 }
 
                 // ---- página: atalhos ----
-                if root.page == 7 : Flickable {
+                if root.page == 7 && !root.chat-open : Flickable {
                     content-height: grid.preferred-height;
                     grid := VerticalLayout {
                         alignment: start;
@@ -900,8 +941,55 @@ export component Notch inherits Window {
                     }
                 }
 
+                // ---- chat com o Claude (pela assinatura, via Claude Code) ----
+                if root.chat-open : VerticalLayout {
+                    spacing: 8px;
+                    chat-flick := Flickable {
+                        vertical-stretch: 1;
+                        content-height: chat-list.preferred-height;
+                        // Sempre mostra o fim da conversa.
+                        content-y: min(0px, self.height - chat-list.preferred-height);
+                        chat-list := VerticalLayout {
+                            alignment: end;
+                            spacing: 6px;
+                            if root.chat-messages.length == 0 && !root.chat-busy : Text {
+                                text: "Pergunte qualquer coisa. Usa a sua assinatura do Claude pelo Claude Code instalado (sem chave de API).";
+                                color: #8E8E93; font-size: 12px; wrap: word-wrap; horizontal-alignment: center;
+                            }
+                            for m in root.chat-messages : HorizontalLayout {
+                                alignment: m.user ? end : start;
+                                Rectangle {
+                                    max-width: root.open-width * 0.62; // balão no máximo ~2/3 da largura
+                                    border-radius: 12px;
+                                    background: m.user ? #D97757 : #1C1C20;
+                                    HorizontalLayout {
+                                        padding: 8px;
+                                        padding-left: 11px;
+                                        padding-right: 11px;
+                                        Text { text: m.text; color: white; font-size: 12.5px; wrap: word-wrap; }
+                                    }
+                                }
+                            }
+                            if root.chat-busy : Text { text: "Claude está pensando…"; color: #D97757; font-size: 12px; }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        height: 32px;
+                        chat-input := LineEdit {
+                            placeholder-text: "Mensagem para o Claude";
+                            font-size: 12.5px;
+                            enabled: !root.chat-busy;
+                            changed has-focus => { root.chat-focused = self.has-focus; if (self.has-focus) { root.want-keyboard(); } }
+                            accepted(text) => { if (text != "") { root.chat-send(text); self.text = ""; } }
+                        }
+                        IconButton { glyph: "\u{E724}"; size: 13px; tint: #D97757; clicked => { if (chat-input.text != "" && !root.chat-busy) { root.chat-send(chat-input.text); chat-input.text = ""; } } }
+                        IconButton { glyph: "\u{E74D}"; size: 12px; tint: #8E8E93; clicked => { root.chat-clear(); } }
+                    }
+                }
+
                 // ---- página: agentes do Claude Code ----
-                if root.page == 8 : VerticalLayout {
+                if root.page == 8 && !root.chat-open : VerticalLayout {
                     spacing: 8px;
                     if root.perm-visible : Rectangle {
                         border-radius: 14px;
@@ -1120,6 +1208,9 @@ export component Settings inherits Window {
     in-out property <int> edge;
     in-out property <bool> app-notifications: true;
     in-out property <bool> sounds: true;
+    in-out property <string> city;
+    in property <string> city-status;
+    callback save-city(string);
     in property <bool> agents-connected;
     in property <string> agents-status;
     callback agents-connect();
@@ -1143,6 +1234,7 @@ export component Settings inherits Window {
         { glyph: "\u{E8A9}", text: "Páginas" },
         { glyph: "\u{E790}", text: "Aparência" },
         { glyph: "\u{EA8F}", text: "Notificações" },
+        { glyph: "\u{E706}", text: "Clima" },
         { glyph: "\u{E99A}", text: "Agentes" },
         { glyph: "\u{E895}", text: "Atualizações" },
         { glyph: "\u{E7E8}", text: "App" },
@@ -1150,7 +1242,7 @@ export component Settings inherits Window {
     // Clicar no menu rola até a seção (como no Orbi em C#).
     function go(i: int) {
         root.section = i;
-        let y = i == 0 ? s0.y : i == 1 ? sp.y : i == 2 ? s1.y : i == 3 ? s2.y : i == 4 ? sa.y : i == 5 ? s3.y : s4.y;
+        let y = i == 0 ? s0.y : i == 1 ? sp.y : i == 2 ? s1.y : i == 3 ? s2.y : i == 4 ? sw.y : i == 5 ? sa.y : i == 6 ? s3.y : s4.y;
         flick.content-y = max(-(y - 8px), flick.height - flick.content-height);
     }
 
@@ -1378,6 +1470,23 @@ export component Settings inherits Window {
                                 sub: "Tarefas com hora (ex.: \"ligar pro banco às 15h\") avisam no notch.";
                                 checked <=> root.reminders;
                                 toggled => { root.changed(); }
+                            }
+                        }
+
+                        sw := SectionLabel { text: "CLIMA"; height: 46px; vertical-alignment: bottom; }
+                        Rectangle { height: 10px; }
+                        Card {
+                            Row {
+                                title: "Cidade";
+                                sub: root.city-status;
+                                VerticalLayout {
+                                    alignment: center;
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        city-edit := LineEdit { width: 180px; text <=> root.city; placeholder-text: "ex.: Campinas"; accepted(t) => { root.save-city(t); } }
+                                        PillButton { text: "Salvar"; clicked => { root.save-city(city-edit.text); } }
+                                    }
+                                }
                             }
                         }
 

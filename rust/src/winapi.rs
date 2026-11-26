@@ -301,6 +301,40 @@ pub fn pick_path(folder: bool) -> Option<String> {
     }
 }
 
+/// Temperatura do PC pelo contador "Thermal Zone Information" do Windows (sem administrador).
+/// Muitos desktops não informam: aí fica None e o anel/medidor de temperatura não aparece.
+pub struct Thermal { query: windows::Win32::System::Performance::PDH_HQUERY, counter: windows::Win32::System::Performance::PDH_HCOUNTER }
+
+impl Thermal {
+    pub fn new() -> Option<Self> {
+        use windows::Win32::System::Performance::{PdhAddEnglishCounterW, PdhCollectQueryData, PdhOpenQueryW};
+        unsafe {
+            let (mut query, mut counter) = (Default::default(), Default::default());
+            if PdhOpenQueryW(PCWSTR::null(), 0, &mut query) != 0 { return None; }
+            if PdhAddEnglishCounterW(query, windows::core::w!("\\Thermal Zone Information(*)\\Temperature"), 0, &mut counter) != 0 { return None; }
+            PdhCollectQueryData(query);
+            Some(Thermal { query, counter })
+        }
+    }
+
+    /// Maior temperatura entre as zonas, em °C.
+    pub fn read(&self) -> Option<f32> {
+        use windows::Win32::System::Performance::{PdhCollectQueryData, PdhGetFormattedCounterArrayW, PDH_FMT_COUNTERVALUE_ITEM_W, PDH_FMT_DOUBLE};
+        unsafe {
+            if PdhCollectQueryData(self.query) != 0 { return None; }
+            let (mut size, mut count) = (0u32, 0u32);
+            PdhGetFormattedCounterArrayW(self.counter, PDH_FMT_DOUBLE, &mut size, &mut count, None);
+            if size == 0 { return None; }
+            let item = std::mem::size_of::<PDH_FMT_COUNTERVALUE_ITEM_W>();
+            let mut buf: Vec<PDH_FMT_COUNTERVALUE_ITEM_W> = vec![Default::default(); (size as usize).div_ceil(item) + 1];
+            if PdhGetFormattedCounterArrayW(self.counter, PDH_FMT_DOUBLE, &mut size, &mut count, Some(buf.as_mut_ptr())) != 0 { return None; }
+            // Vem em Kelvin; zonas zeradas ou absurdas ficam de fora.
+            buf[..count as usize].iter().map(|i| i.FmtValue.Anonymous.doubleValue - 273.15)
+                .filter(|c| (1.0..130.0).contains(c)).fold(None, |m: Option<f64>, c| Some(m.map_or(c, |m| m.max(c)))).map(|c| c as f32)
+        }
+    }
+}
+
 /// Abre um app, arquivo, pasta ou site como o Explorer abriria.
 pub fn open(target: &str) {
     unsafe { ShellExecuteW(Some(HWND::default()), &HSTRING::from("open"), &HSTRING::from(target), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL) };

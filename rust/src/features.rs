@@ -57,6 +57,84 @@ pub fn setup(notch: &Notch) {
     shortcuts(notch);
 }
 
+// ---------- chat com o Claude (pela assinatura, via Claude Code) ----------
+
+pub fn chat(notch: &Notch) {
+    let history: Rc<RefCell<Vec<(bool, String)>>> = Default::default();
+    let render = {
+        let (weak, history) = (notch.as_weak(), history.clone());
+        Rc::new(move || {
+            let Some(n) = weak.upgrade() else { return };
+            let rows: Vec<_> = history.borrow().iter().map(|(user, text)| crate::ChatMsg { user: *user, text: text.into() }).collect();
+            n.set_chat_messages(ModelRc::new(VecModel::from(rows)));
+        })
+    };
+    let (weak, h, r) = (notch.as_weak(), history.clone(), render.clone());
+    notch.on_chat_send(move |text| {
+        let Some(n) = weak.upgrade() else { return };
+        let question = text.trim().to_string();
+        if question.is_empty() || n.get_chat_busy() { return; }
+        let prompt = crate::chat::prompt(&h.borrow(), &question);
+        h.borrow_mut().push((true, question));
+        n.set_chat_busy(true);
+        r();
+        let weak = weak.clone();
+        std::thread::spawn(move || {
+            let answer = match crate::chat::find() {
+                Some(exe) => crate::chat::ask(&exe, &prompt),
+                None => Err("Não achei o Claude Code neste PC. Instale e faça /login uma vez no terminal (comando \"claude\").".into()),
+            };
+            let _ = slint::invoke_from_event_loop(move || {
+                let Some(n) = weak.upgrade() else { return };
+                CHAT_REPLY.with(|c| if let Some(f) = &*c.borrow() { f(answer.unwrap_or_else(|e| format!("⚠ {e}"))); });
+                n.set_chat_busy(false);
+            });
+        });
+    });
+    let (h, r) = (history.clone(), render.clone());
+    CHAT_REPLY.with(|c| *c.borrow_mut() = Some(Box::new(move |text| { h.borrow_mut().push((false, text)); r(); })));
+    let (h, r) = (history, render);
+    notch.on_chat_clear(move || { h.borrow_mut().clear(); r(); });
+}
+
+thread_local! {
+    static CHAT_REPLY: RefCell<Option<Box<dyn Fn(String)>>> = RefCell::new(None);
+}
+
+// ---------- clima (Open-Meteo, da cidade escolhida nas configurações) ----------
+
+pub fn weather(notch: &Notch) {
+    let weak = notch.as_weak();
+    let timer = Timer::default();
+    let tick: Rc<dyn Fn()> = Rc::new(move || {
+        let Some((lat, lon)) = crate::settings::get().city_coords() else {
+            if let Some(n) = weak.upgrade() { n.set_weather_text("".into()); }
+            return;
+        };
+        let weak = weak.clone();
+        std::thread::spawn(move || {
+            let now = crate::weather::now(lat, lon);
+            let _ = slint::invoke_from_event_loop(move || {
+                let (Some(n), Some((temp, code))) = (weak.upgrade(), now) else { return };
+                n.set_weather_glyph(crate::weather::describe(code).0.into());
+                n.set_weather_text(format!("{}°", temp.round()).into());
+            });
+        });
+    });
+    tick();
+    let t = tick.clone();
+    timer.start(TimerMode::Repeated, Duration::from_secs(30 * 60), move || t());
+    std::mem::forget(timer);
+    WEATHER_TICK.with(|w| *w.borrow_mut() = Some(tick));
+}
+
+thread_local! { static WEATHER_TICK: RefCell<Option<Rc<dyn Fn()>>> = RefCell::new(None); }
+
+/// Pede o clima de novo agora (depois de escolher a cidade).
+pub fn weather_now() {
+    if let Some(t) = WEATHER_TICK.with(|w| w.borrow().clone()) { t(); }
+}
+
 // ---------- WhatsApp e Discord ----------
 
 fn app_notifications(notch: &Notch) {

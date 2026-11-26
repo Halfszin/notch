@@ -155,7 +155,7 @@ pub fn setup(notch: &Notch) {
             // Notas abertas: a janela aceita teclado (clicar no texto já deixa digitar).
             // Notch fechou: volta a não roubar o foco.
             if let Some(hwnd) = hwnd_of(w) {
-                if open && n.get_page() == 4 { set_noactivate(hwnd, false); }
+                if open && (n.get_page() == 4 || n.get_chat_open()) { set_noactivate(hwnd, false); }
                 else if !open { set_noactivate(hwnd, true); }
             }
             // Centro aproximado do avatar (lado esquerdo do notch aberto).
@@ -230,6 +230,7 @@ pub fn setup(notch: &Notch) {
         let Some(n) = weak.upgrade() else { return };
         let (clock, date) = now_text();
         n.set_clock(clock.into());
+        THERMAL.with(|t| n.set_temp(t.as_ref().and_then(|t| t.read()).unwrap_or(-1.0)));
         if !n.get_volume_held() {
             if let Some(v) = crate::winapi::media_volume() { n.set_volume(v); }
         }
@@ -265,6 +266,8 @@ fn set_noactivate(hwnd: HWND, on: bool) {
         if want != ex { SetWindowLongPtrW(hwnd, GWL_EXSTYLE, want); }
     }
 }
+
+thread_local! { static THERMAL: Option<crate::winapi::Thermal> = crate::winapi::Thermal::new(); }
 
 /// Borda mais perto do cursor (0 = topo, 1 = esquerda, 2 = direita) e onde nela (0 a 1), como no Orbi em C#.
 pub fn nearest_edge(x: f32, y: f32, sw: f32, sh: f32) -> (i32, f32) {

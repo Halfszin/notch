@@ -4,6 +4,8 @@
 slint::include_modules!();
 
 mod agents;
+mod chat;
+mod weather;
 mod color;
 mod lyrics;
 mod pages;
@@ -72,6 +74,8 @@ fn run() -> Result<(), slint::PlatformError> {
         let p = settings::get();
         agents::setup(&notch, p.agent_port, p.agent_token);
         settings::refresh_agents(&notch);
+        features::chat(&notch);
+        features::weather(&notch);
     }
     notch.run()
 }

@@ -33,6 +33,10 @@ pub struct Prefs {
     /// Servidor dos agentes do Claude Code: porta (diferente da do Orbi em C#, que usa 47821) e código secreto.
     pub agent_port: u16,
     pub agent_token: String,
+    /// Clima: cidade escolhida e onde ela fica (vazio = sem clima).
+    pub city: String,
+    pub lat: Option<f64>,
+    pub lon: Option<f64>,
     /// Páginas na ordem das bolinhas (id = posição na lista PAGES) e se aparecem.
     pub pages: Vec<PageCfg>,
 }
@@ -46,10 +50,14 @@ pub struct PageCfg {
 /// Nomes das páginas, na ordem dos ids da interface (titles do notch.slint).
 const PAGES: [&str; 9] = ["Tocando", "Tarefas", "Foco", "Calendário", "Notas", "Copiados", "Sistema", "Atalhos", "Agentes"];
 
+impl Prefs {
+    pub fn city_coords(&self) -> Option<(f64, f64)> { Some((self.lat?, self.lon?)) }
+}
+
 impl Default for Prefs {
     fn default() -> Self {
         Prefs {
-            battery_alerts: true, audio_alerts: true, reminders: true, lyrics: true, gradient: true, auto_update: true, compact: false, edge: 0, edge_pos: 0.5, game_mode: false, app_notifications: true, sounds: true, agent_port: 47831, agent_token: String::new(),
+            battery_alerts: true, audio_alerts: true, reminders: true, lyrics: true, gradient: true, auto_update: true, compact: false, edge: 0, edge_pos: 0.5, game_mode: false, app_notifications: true, sounds: true, agent_port: 47831, agent_token: String::new(), city: String::new(), lat: None, lon: None,
             pages: (0..PAGES.len()).map(|id| PageCfg { id, visible: true }).collect(),
         }
     }
@@ -208,6 +216,9 @@ pub fn show() {
                     sounds: w.get_sounds(),
                     agent_port: get().agent_port,
                     agent_token: get().agent_token,
+                    city: get().city,
+                    lat: get().lat,
+                    lon: get().lon,
                     pages: get().pages,
                 };
                 crate::store::save(FILE, &prefs);
@@ -235,6 +246,8 @@ pub fn show() {
                 let (a, b) = (i as usize, (i + dir) as usize);
                 if a < p.len() && b < p.len() { p.swap(a, b); }
             }));
+            let weak = w.as_weak();
+            w.on_save_city(move |text| save_city(&weak, text.to_string()));
             w.on_agents_connect(|| agents_switch(true));
             w.on_agents_disconnect(|| agents_switch(false));
             w.on_check_update(updater::check_now);
@@ -259,6 +272,8 @@ pub fn show() {
         w.set_edge(p.edge);
         w.set_app_notifications(p.app_notifications);
         w.set_sounds(p.sounds);
+        w.set_city(p.city.clone().into());
+        w.set_city_status(if p.city.is_empty() { "Escreva sua cidade para ver o clima no topo do notch.".into() } else { format!("Mostrando o clima de {}.", p.city).into() });
         if let Some(n) = NOTCH.with(|n| n.borrow().as_ref().and_then(|w| w.upgrade())) { refresh_agents(&n); }
         set_page_list(w, &p.pages);
         w.set_start_with_windows(autostart());
@@ -274,6 +289,42 @@ pub fn show() {
             ww.focus_window();
             if let Some(h) = crate::system::hwnd_of(ww) {
                 unsafe { let _ = windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow(h); }
+            }
+        });
+    });
+}
+
+// ---------- clima ----------
+
+fn save_city(weak: &Weak<Settings>, text: String) {
+    let Some(w) = weak.upgrade() else { return };
+    if text.trim().is_empty() {
+        let mut p = get();
+        (p.city, p.lat, p.lon) = (String::new(), None, None);
+        crate::store::save(FILE, &p);
+        PREFS.with(|x| *x.borrow_mut() = p);
+        w.set_city_status("Clima desligado.".into());
+        crate::features::weather_now();
+        return;
+    }
+    w.set_city_status("Procurando…".into());
+    let weak = weak.clone();
+    std::thread::spawn(move || {
+        let found = crate::weather::find_city(&text);
+        let _ = slint::invoke_from_event_loop(move || {
+            let Some(w) = weak.upgrade() else { return };
+            match found {
+                Ok(Some((lat, lon, name))) => {
+                    let mut p = get();
+                    (p.city, p.lat, p.lon) = (name.clone(), Some(lat), Some(lon));
+                    crate::store::save(FILE, &p);
+                    PREFS.with(|x| *x.borrow_mut() = p);
+                    w.set_city(name.clone().into());
+                    w.set_city_status(format!("Mostrando o clima de {name}.").into());
+                    crate::features::weather_now();
+                }
+                Ok(None) => w.set_city_status("Não achei essa cidade. Tente só o nome, ex.: Campinas.".into()),
+                Err(e) => w.set_city_status(format!("Não deu para procurar agora: {e}").into()),
             }
         });
     });
