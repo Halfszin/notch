@@ -189,7 +189,9 @@ mod win {
         let evt = parts[1].to_string();
         let (tx, rx) = mpsc::channel();
         let wait = if evt == "PermissionRequest" { 115 } else { 5 };
-        let _ = slint::invoke_from_event_loop(move || handle(&weak, &evt, payload, tx));
+        log(&format!("recebido {evt}"));
+        let sent = slint::invoke_from_event_loop(move || handle(&weak, &evt, payload, tx));
+        if let Err(e) = sent { log(&format!("não chegou na interface: {e}")); }
         // Sem resposta a tempo: vazio, e o Claude Code pergunta no terminal como sempre.
         let answer = rx.recv_timeout(Duration::from_secs(wait)).unwrap_or_default();
         reply(&mut conn, 200, &answer)
@@ -240,8 +242,17 @@ mod win {
     fn now_unix() -> f64 { std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0) }
 
     /// Um evento chegou (na thread da interface).
+    /// Registro do caminho dos eventos (%AppData%\Orbi\rust-agentes.log), para achar onde um evento para.
+    fn log(line: &str) {
+        use std::io::Write;
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(crate::store::dir().join("rust-agentes.log")) {
+            let _ = writeln!(f, "{line}");
+        }
+    }
+
     fn handle(weak: &slint::Weak<Notch>, evt: &str, p: Value, tx: mpsc::Sender<String>) {
-        let Some(n) = weak.upgrade() else { return };
+        log(&format!("na interface {evt}"));
+        let Some(n) = weak.upgrade() else { log("notch sumiu"); return };
         if evt == "statusline" {
             let now = now_unix();
             let model = p.get("model").and_then(|m| str_of(m, "display_name")).unwrap_or("Claude").to_string();
@@ -300,6 +311,7 @@ mod win {
             h.sessions.retain(|_, s| s.busy || s.updated.elapsed() < Duration::from_secs(30 * 60));
         });
         if answer_now { let _ = tx.send("{}".into()); }
+        log(&format!("tratado {evt}"));
         match evt {
             "PermissionRequest" => {
                 crate::features::toast(&n, "\u{E72E}", &format!("{project}: pedindo permissão"), slint::Color::from_rgb_u8(0xFF, 0x9F, 0x0A), 6);

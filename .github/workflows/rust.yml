@@ -229,6 +229,7 @@ jobs:
           Shot "14-atualizado"
           if (Test-Path "$env:APPDATA\Orbi\rust-erro.log") { Copy-Item "$env:APPDATA\Orbi\rust-erro.log" ci\erro.log }
           if (Test-Path "$env:APPDATA\Orbi\rust-diag.txt") { Copy-Item "$env:APPDATA\Orbi\rust-diag.txt" ci\diag.txt }
+          if (Test-Path "$env:APPDATA\Orbi\rust-agentes.log") { Copy-Item "$env:APPDATA\Orbi\rust-agentes.log" ci\agentes.log }
           if (-not $p.HasExited) { Stop-Process $p -Force }
           # O resultado é conferido no passo "Falhar se fechou"; o código de saída do último curl não conta.
           exit 0
