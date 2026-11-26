@@ -27,6 +27,7 @@ pub fn start(notch: &Notch) {
         // Letra da música atual (buscada em outra thread quando a música muda).
         let lyrics: Arc<Mutex<(String, Option<Vec<crate::lyrics::Line>>)>> = Arc::new(Mutex::new((String::new(), None)));
         let mut pending: Option<Command> = None;
+        let mut cover_tries = 0u32;
         loop {
             let session = current(&manager);
             if let Some(s) = &session {
@@ -41,14 +42,18 @@ pub fn start(notch: &Notch) {
             let info = session.as_ref().and_then(read);
             let key = info.as_ref().map(|i| format!("{}|{}", i.title, i.artist)).unwrap_or_default();
             // Capa só quando a música muda (ler a imagem a cada segundo seria desperdício).
-            let cover = if key != last_key { session.as_ref().and_then(cover_of) } else { None };
             let changed = key != last_key;
+            // O Spotify troca o título antes da capa: lê a capa de novo por ~3 s depois da troca
+            // (a primeira leitura pode vir vazia ou ainda com a capa da música anterior).
+            if changed { cover_tries = 12; }
+            let cover = if cover_tries > 0 { cover_tries -= 1; session.as_ref().and_then(cover_of) } else { None };
+            let set_cover = changed || cover.is_some();
             if changed {
                 if let Some(i) = &info {
-                    let (lyrics, key, artist, title, len) = (lyrics.clone(), key.clone(), i.artist.clone(), i.title.clone(), i.len);
+                    let (lyrics, key, artist, title, album, len) = (lyrics.clone(), key.clone(), i.artist.clone(), i.title.clone(), i.album.clone(), i.len);
                     *lyrics.lock().unwrap() = (key.clone(), None);
                     std::thread::spawn(move || {
-                        let found = crate::lyrics::fetch(&artist, &title, len);
+                        let found = crate::lyrics::fetch(&artist, &title, &album, len);
                         let mut l = lyrics.lock().unwrap();
                         if l.0 == key { l.1 = found; } // ainda é a mesma música
                     });
@@ -91,7 +96,7 @@ pub fn start(notch: &Notch) {
                     n.set_lyric_next(next.into());
                     n.set_lyric_next2(next2.into());
                 }
-                if changed {
+                if set_cover {
                     match cover {
                         Some((buffer, accent)) => {
                             n.set_cover(Image::from_rgba8(buffer));
@@ -118,7 +123,7 @@ fn current(manager: &Manager) -> Option<Session> {
     manager.GetCurrentSession().ok()
 }
 
-struct Info { title: String, artist: String, playing: bool, progress: f32, elapsed: String, remaining: String, pos: f64, len: f64 }
+struct Info { title: String, artist: String, album: String, playing: bool, progress: f32, elapsed: String, remaining: String, pos: f64, len: f64 }
 
 fn read(s: &Session) -> Option<Info> {
     let props = s.TryGetMediaPropertiesAsync().ok()?.join().ok()?;
@@ -139,6 +144,7 @@ fn read(s: &Session) -> Option<Info> {
     Some(Info {
         title,
         artist: props.Artist().map(|a| a.to_string()).unwrap_or_default(),
+        album: props.AlbumTitle().map(|a| a.to_string()).unwrap_or_default(),
         playing,
         progress: ratio as f32,
         elapsed: fmt(len * ratio),
@@ -165,11 +171,19 @@ fn cover_of(s: &Session) -> Option<(SharedPixelBuffer<Rgba8Pixel>, slint::Color)
     let stream = props.Thumbnail().ok()?.OpenReadAsync().ok()?.join().ok()?;
     let size = stream.Size().ok()? as u32;
     if size == 0 || size > 8 * 1024 * 1024 { return None; }
-    let buffer = Buffer::Create(size).ok()?;
-    let read = stream.ReadAsync(&buffer, size, InputStreamOptions::None).ok()?.join().ok()?;
-    let reader = windows::Storage::Streams::DataReader::FromBuffer(&read).ok()?;
-    let mut bytes = vec![0u8; read.Length().ok()? as usize];
-    reader.ReadBytes(&mut bytes).ok()?;
+    // Uma leitura pode devolver só parte da imagem (aí ela não abre): lê até vir tudo.
+    let mut bytes = Vec::with_capacity(size as usize);
+    while bytes.len() < size as usize {
+        let want = size - bytes.len() as u32;
+        let buffer = Buffer::Create(want).ok()?;
+        let read = stream.ReadAsync(&buffer, want, InputStreamOptions::None).ok()?.join().ok()?;
+        let got = read.Length().ok()? as usize;
+        if got == 0 { break; }
+        let reader = windows::Storage::Streams::DataReader::FromBuffer(&read).ok()?;
+        let mut chunk = vec![0u8; got];
+        reader.ReadBytes(&mut chunk).ok()?;
+        bytes.extend_from_slice(&chunk);
+    }
     let img = image::load_from_memory(&bytes).ok()?.to_rgba8();
     let (r, g, b, n) = img.pixels().step_by(7).fold((0u64, 0u64, 0u64, 0u64), |(r, g, b, n), p| (r + p[0] as u64, g + p[1] as u64, b + p[2] as u64, n + 1));
     let accent = crate::color::accent(r / n.max(1), g / n.max(1), b / n.max(1));

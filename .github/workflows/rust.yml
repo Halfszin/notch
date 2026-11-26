@@ -58,6 +58,9 @@ jobs:
           '[{"Name":"Bloco de notas","Target":"C:\\Windows\\System32\\notepad.exe"},{"Name":"github.com","Target":"https://github.com/"},{"Name":"Windows","Target":"C:\\Windows"}]' | Set-Content "$env:APPDATA\Orbi\atalhos.json" -Encoding utf8
           Add-Type -Namespace W -Name M -MemberDefinition '[DllImport("user32.dll")] public static extern void mouse_event(uint f, int x, int y, int d, System.UIntPtr e);'
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 900, 700
+          # Letra de verdade no LRCLIB (com e sem álbum): o notch mostra a letra da música tocando.
+          Start-Process $exe -ArgumentList "--testar-letra" -Wait
+          Get-Content "$env:APPDATA\Orbi\rust-letra.txt" | Out-File ci\resultado.txt -Append
           # --startup: abre como ao ligar o PC (só o notch, sem a tela de configurações).
           $p = Start-Process $exe -ArgumentList "--startup" -PassThru
           Start-Sleep 6
@@ -196,6 +199,7 @@ jobs:
         run: |
           if (-not (Select-String -Path ci\resultado.txt -Pattern 'vivo=True' -Quiet)) { exit 1 }
           if (Test-Path ci\erro.log) { Get-Content ci\erro.log; exit 1 }
+          if (Select-String -Path ci\resultado.txt -Pattern '^(com|sem)_album=0$' -Quiet) { Write-Error "não achou a letra no LRCLIB"; exit 1 }
 
       - name: Instalador
         timeout-minutes: 10

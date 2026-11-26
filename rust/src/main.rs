@@ -39,6 +39,19 @@ fn main() {
 }
 
 fn run() -> Result<(), slint::PlatformError> {
+    // Teste do CI: busca uma letra de verdade no LRCLIB (com álbum e sem álbum) e grava o resultado.
+    #[cfg(windows)]
+    if std::env::args().any(|a| a == "--testar-letra") {
+        let count = |l: Option<Vec<lyrics::Line>>| l.map_or(0, |l| l.len());
+        let text = format!(
+            "com_album={}\nsem_album={}\n",
+            count(lyrics::fetch("Coldplay", "Yellow", "Parachutes", 269.0)),
+            count(lyrics::fetch("Coldplay", "Yellow", "", 0.0)),
+        );
+        let _ = std::fs::create_dir_all(store::dir());
+        let _ = std::fs::write(store::dir().join("rust-letra.txt"), text);
+        return Ok(());
+    }
     #[cfg(windows)]
     if !settings::claim_instance() { return Ok(()); }
     let notch = Notch::new()?;

@@ -46,24 +46,49 @@ pub fn http() -> ureq::Agent {
     ureq::Agent::config_builder().tls_config(TlsConfig::builder().provider(TlsProvider::NativeTls).build()).build().new_agent()
 }
 
+/// Letra sincronizada no LRCLIB. O /api/get só responde com artista, música, álbum e duração exatos;
+/// sem álbum ou com outra duração, procura no /api/search e fica com a de duração mais perto.
 #[cfg(windows)]
-pub fn fetch(artist: &str, title: &str, duration: f64) -> Option<Vec<Line>> {
-    let mut req = http().get("https://lrclib.net/api/get")
-        .query("artist_name", artist)
-        .query("track_name", title)
-        .header("User-Agent", "Orbi (github.com/Halfszin/notch)");
-    if duration > 0.0 {
-        req = req.query("duration", &format!("{}", duration.round() as u64));
+pub fn fetch(artist: &str, title: &str, album: &str, duration: f64) -> Option<Vec<Line>> {
+    let agent = http();
+    let get = |path: &str, q: &[(&str, String)]| -> Option<serde_json::Value> {
+        let mut req = agent.get(format!("https://lrclib.net/api/{path}")).header("User-Agent", "Orbi (github.com/Halfszin/notch)");
+        for (k, v) in q { req = req.query(*k, v); }
+        serde_json::from_str(&req.call().ok()?.body_mut().read_to_string().ok()?).ok()
+    };
+    let synced = |v: &serde_json::Value| v.get("syncedLyrics").and_then(|s| s.as_str()).map(parse_lrc).filter(|l| !l.is_empty());
+    if !album.is_empty() && duration > 0.0 {
+        let q = [("artist_name", artist.to_string()), ("track_name", title.to_string()), ("album_name", album.to_string()), ("duration", format!("{}", duration.round() as u64))];
+        if let Some(lines) = get("get", &q).as_ref().and_then(synced) { return Some(lines); }
     }
-    let body = req.call().ok()?.body_mut().read_to_string().ok()?;
-    let json: serde_json::Value = serde_json::from_str(&body).ok()?;
-    let lines = parse_lrc(json.get("syncedLyrics")?.as_str()?);
-    (!lines.is_empty()).then_some(lines)
+    let found = get("search", &[("artist_name", artist.to_string()), ("track_name", title.to_string())])?;
+    pick(found.as_array()?, duration).and_then(synced)
+}
+
+/// Entre os resultados da busca com letra sincronizada, o de duração mais perto da música tocando.
+pub fn pick(items: &[serde_json::Value], duration: f64) -> Option<&serde_json::Value> {
+    items.iter()
+        .filter(|v| v.get("syncedLyrics").and_then(|s| s.as_str()).is_some_and(|s| !s.is_empty()))
+        .min_by(|a, b| {
+            let d = |v: &serde_json::Value| if duration > 0.0 { (v.get("duration").and_then(|d| d.as_f64()).unwrap_or(0.0) - duration).abs() } else { 0.0 };
+            d(a).total_cmp(&d(b))
+        })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn escolhe_a_busca_de_duracao_mais_perto() {
+        let items: Vec<serde_json::Value> = serde_json::from_str(r#"[
+            {"id":1,"duration":200,"syncedLyrics":null},
+            {"id":2,"duration":250,"syncedLyrics":"[00:01.00] a"},
+            {"id":3,"duration":389,"syncedLyrics":"[00:01.00] b"}]"#).unwrap();
+        assert_eq!(pick(&items, 390.0).unwrap()["id"], 3);
+        assert_eq!(pick(&items, 0.0).unwrap()["id"], 2);
+        assert!(pick(&items[..1], 200.0).is_none());
+    }
 
     #[test]
     fn le_letra_e_acha_a_linha_atual() {
