@@ -393,6 +393,9 @@ export component Notch inherits Window {
     // Ícone de verdade do app (do menu Iniciar), quando o Windows entrega.
     in property <image> toast-icon;
     in property <bool> has-toast-icon;
+    // App do aviso: WhatsApp, Discord, Gmail e Outlook têm o logo próprio (enviado pelo dono).
+    in property <string> toast-app;
+    property <bool> brand-icon: root.toast-app == "WhatsApp" || root.toast-app == "Discord" || root.toast-app == "Gmail" || root.toast-app == "Outlook";
     out property <length> toast-width: 360px;
     out property <length> toast-height: 36px;
 
@@ -532,11 +535,21 @@ export component Notch inherits Window {
             padding-left: 16px;
             padding-right: 16px;
             if !root.toast-badge : Text { text: root.toast-glyph; font-family: "Segoe MDL2 Assets"; font-size: 14px; color: root.toast-color; vertical-alignment: center; }
-            if root.has-toast-icon : VerticalLayout {
+            if root.brand-icon : VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 22px; height: 22px;
+                    if root.toast-app == "WhatsApp" : Image { source: @image-url("icons/whatsapp.png"); width: 22px; height: 22px; }
+                    if root.toast-app == "Discord" : Image { source: @image-url("icons/discord.png"); width: 22px; height: 22px; }
+                    if root.toast-app == "Gmail" : Image { source: @image-url("icons/gmail.png"); width: 22px; height: 22px; }
+                    if root.toast-app == "Outlook" : Image { source: @image-url("icons/outlook.png"); width: 22px; height: 22px; }
+                }
+            }
+            if root.has-toast-icon && !root.brand-icon : VerticalLayout {
                 alignment: center;
                 Image { source: root.toast-icon; width: 22px; height: 22px; image-fit: contain; }
             }
-            if root.toast-badge && !root.has-toast-icon : VerticalLayout {
+            if root.toast-badge && !root.has-toast-icon && !root.brand-icon : VerticalLayout {
                 alignment: center;
                 Rectangle {
                     width: 22px; height: 22px; border-radius: 7px; background: root.toast-color;

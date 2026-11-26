@@ -20,6 +20,7 @@ thread_local! {
 pub fn toast(n: &Notch, glyph: &str, text: &str, color: Color, secs: u64) {
     n.set_toast_badge(false);
     n.set_has_toast_icon(false);
+    n.set_toast_app("".into());
     n.set_toast_glyph(glyph.into());
     n.set_toast_text(text.into());
     n.set_toast_color(color);
@@ -38,9 +39,8 @@ pub fn toast_app(n: &Notch, app: &str, icon: Option<slint::Image>, text: &str) {
         "Gmail" => (Color::from_rgb_u8(0xEA, 0x43, 0x35), "\u{E715}"),
         _ => (Color::from_rgb_u8(0x0A, 0x84, 0xFF), "\u{E715}"), // email
     };
-    // Navegador não tem ícone de email: fica o quadradinho com o envelope.
-    let icon = if app == "Gmail" { None } else { icon };
     toast(n, glyph, text, color, 5);
+    n.set_toast_app(app.into()); // WhatsApp, Discord, Gmail e Outlook: logo próprio; os outros, o ícone do Windows
     n.set_toast_badge(true);
     if let Some(icon) = icon {
         n.set_toast_icon(icon);
