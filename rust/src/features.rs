@@ -102,6 +102,15 @@ pub fn chat(notch: &Notch) {
     CHAT_REPLY.with(|c| *c.borrow_mut() = Some(Box::new(move |text| { h.borrow_mut().push((false, text)); r(); })));
     let (h, r) = (history, render);
     notch.on_chat_clear(move || { h.borrow_mut().clear(); r(); });
+    // Frase nova cada vez que o chat abre (a hora decide o tom; os nanossegundos, qual frase).
+    let weak = notch.as_weak();
+    let greet = move || {
+        let Some(n) = weak.upgrade() else { return };
+        let pick = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos() as usize).unwrap_or(0);
+        n.set_chat_greeting(crate::chat::greeting(crate::system::now().hour, pick).into());
+    };
+    greet();
+    notch.on_chat_opened(greet);
 }
 
 thread_local! {

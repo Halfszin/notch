@@ -14,6 +14,16 @@ pub fn prompt(history: &[(bool, String)], question: &str) -> String {
     s
 }
 
+/// Frase de boas-vindas da conversa vazia, pela hora (como o Claude faz), escolhida por `pick`.
+pub fn greeting(hour: u32, pick: usize) -> &'static str {
+    const MADRUGADA: [&str; 4] = ["Pensamentos da madrugada?", "Ainda acordado? Bora conversar.", "Insônia criativa?", "O que está tirando seu sono?"];
+    const MANHA: [&str; 4] = ["Bom dia! Por onde começamos?", "Café na mão? Manda a primeira.", "Que tal planejar o dia?", "Manhã boa pra uma ideia nova."];
+    const TARDE: [&str; 4] = ["Boa tarde! No que posso ajudar?", "Pausa pro café e uma pergunta?", "O que está na sua cabeça agora?", "Tarde produtiva? Vamos nessa."];
+    const NOITE: [&str; 4] = ["Pensamentos noturnos?", "Boa noite! Sobre o que vamos falar?", "Fim de dia, hora de pensar alto.", "Uma última ideia antes de dormir?"];
+    let list = match hour { 0..=4 => &MADRUGADA, 5..=11 => &MANHA, 12..=17 => &TARDE, _ => &NOITE };
+    list[pick % list.len()]
+}
+
 /// Resposta do "claude -p --output-format json": o texto, ou o erro que ele contou.
 pub fn parse_answer(stdout: &str) -> Result<String, String> {
     let json: serde_json::Value = serde_json::from_str(stdout.trim()).map_err(|_| String::new())?;
@@ -85,6 +95,13 @@ mod tests {
         assert_eq!(prompt(&[], "oi"), "oi");
         let p = prompt(&[(true, "oi".into()), (false, "olá!".into())], "tudo bem?");
         assert!(p.contains("<usuario>\noi\n</usuario>") && p.contains("<assistente>\nolá!\n</assistente>") && p.ends_with("tudo bem?"));
+    }
+
+    #[test]
+    fn frase_pela_hora() {
+        assert_eq!(greeting(23, 0), "Pensamentos noturnos?");
+        assert_eq!(greeting(2, 0), "Pensamentos da madrugada?");
+        assert_eq!(greeting(9, 5), "Café na mão? Manda a primeira.");
     }
 
     #[test]

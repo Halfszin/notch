@@ -357,6 +357,8 @@ export component Notch inherits Window {
     in property <bool> chat-busy;
     in-out property <bool> chat-focused;
     callback chat-send(string);
+    in property <string> chat-greeting;
+    callback chat-opened();
     callback chat-clear();
 
     // Agentes do Claude Code (página 8): sessões, limites do plano e o pedido de permissão da vez.
@@ -625,7 +627,7 @@ export component Notch inherits Window {
                         width: 26px; height: 24px; border-radius: 12px;
                         background: root.chat-open ? #D9775733 : chat-ta.has-hover ? #FFFFFF18 : transparent;
                         ClaudeLogo { x: (parent.width - 15px) / 2; y: (parent.height - 15px) / 2; width: 15px; height: 15px; }
-                        chat-ta := TouchArea { mouse-cursor: pointer; clicked => { root.chat-open = !root.chat-open; } }
+                        chat-ta := TouchArea { mouse-cursor: pointer; clicked => { root.chat-open = !root.chat-open; if (root.chat-open) { root.chat-opened(); } } }
                     }
                     // Modo jogo: verde quando ligado.
                     IconButton { glyph: "\u{E7FC}"; size: 14px; tint: root.game-mode ? #30D158 : #AEAEB2; width: 26px; height: 24px; clicked => { root.game-mode = !root.game-mode; root.game-toggled(); } }
@@ -986,9 +988,12 @@ export component Notch inherits Window {
                         chat-list := VerticalLayout {
                             alignment: end;
                             spacing: 6px;
-                            if root.chat-messages.length == 0 && !root.chat-busy : Text {
-                                text: "Pergunte qualquer coisa. Usa a sua assinatura do Claude pelo Claude Code instalado (sem chave de API).";
-                                color: #8E8E93; font-size: 12px; wrap: word-wrap; horizontal-alignment: center;
+                            // Conversa vazia: como no Claude, o logo e uma frase diferente a cada vez que abre.
+                            if root.chat-messages.length == 0 && !root.chat-busy : VerticalLayout {
+                                spacing: 8px;
+                                padding-bottom: 12px;
+                                HorizontalLayout { alignment: center; ClaudeLogo { width: 28px; height: 28px; } }
+                                Text { text: root.chat-greeting; color: white; font-size: 18px; font-weight: 600; horizontal-alignment: center; wrap: word-wrap; }
                             }
                             for m in root.chat-messages : HorizontalLayout {
                                 alignment: m.user ? end : start;
