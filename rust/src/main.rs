@@ -44,9 +44,10 @@ fn run() -> Result<(), slint::PlatformError> {
     if std::env::args().any(|a| a == "--testar-letra") {
         let count = |l: Option<Vec<lyrics::Line>>| l.map_or(0, |l| l.len());
         let text = format!(
-            "com_album={}\nsem_album={}\n",
+            "com_album={}\nsem_album={}\nlrclib: {}\n",
             count(lyrics::fetch("Coldplay", "Yellow", "Parachutes", 269.0)),
             count(lyrics::fetch("Coldplay", "Yellow", "", 0.0)),
+            lyrics::probe(),
         );
         let _ = std::fs::create_dir_all(store::dir());
         let _ = std::fs::write(store::dir().join("rust-letra.txt"), text);

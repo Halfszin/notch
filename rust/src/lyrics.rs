@@ -65,6 +65,23 @@ pub fn fetch(artist: &str, title: &str, album: &str, duration: f64) -> Option<Ve
     pick(found.as_array()?, duration).and_then(synced)
 }
 
+/// Diagnóstico do CI: o que o LRCLIB responde (ou o erro) a uma busca simples.
+#[cfg(windows)]
+pub fn probe() -> String {
+    let r = http().get("https://lrclib.net/api/search").query("track_name", "Yellow").query("artist_name", "Coldplay")
+        .header("User-Agent", "Orbi (github.com/Halfszin/notch)").call();
+    match r {
+        Ok(mut res) => {
+            let status = res.status();
+            match res.body_mut().read_to_string() {
+                Ok(b) => format!("status={status} tamanho={} começo={}", b.len(), b.chars().take(120).collect::<String>()),
+                Err(e) => format!("status={status} erro_ao_ler={e}"),
+            }
+        }
+        Err(e) => format!("erro={e}"),
+    }
+}
+
 /// Entre os resultados da busca com letra sincronizada, o de duração mais perto da música tocando.
 pub fn pick(items: &[serde_json::Value], duration: f64) -> Option<&serde_json::Value> {
     items.iter()

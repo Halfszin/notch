@@ -61,6 +61,7 @@ jobs:
           # Letra de verdade no LRCLIB (com e sem álbum): o notch mostra a letra da música tocando.
           Start-Process $exe -ArgumentList "--testar-letra" -Wait
           Get-Content "$env:APPDATA\Orbi\rust-letra.txt" | Out-File ci\resultado.txt -Append
+          try { $r = Invoke-WebRequest "https://lrclib.net/api/search?track_name=Yellow&artist_name=Coldplay" -UseBasicParsing; "pwsh_lrclib=$($r.StatusCode) $($r.Content.Length)" | Out-File ci\resultado.txt -Append } catch { "pwsh_lrclib_erro=$_" | Out-File ci\resultado.txt -Append }
           # --startup: abre como ao ligar o PC (só o notch, sem a tela de configurações).
           $p = Start-Process $exe -ArgumentList "--startup" -PassThru
           Start-Sleep 6
