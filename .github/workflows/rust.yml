@@ -64,6 +64,7 @@ jobs:
           try { $r = Invoke-WebRequest "https://lrclib.net/api/search?track_name=Yellow&artist_name=Coldplay" -UseBasicParsing; "pwsh_lrclib=$($r.StatusCode) $($r.Content.Length)" | Out-File ci\resultado.txt -Append } catch { "pwsh_lrclib_erro=$_" | Out-File ci\resultado.txt -Append }
           # Clima de uma cidade (o Orbi completa o resto do arquivo ao abrir).
           '{"city":"São Paulo, Brasil","lat":-23.55,"lon":-46.63}' | Set-Content "$env:APPDATA\Orbi\rust-config.json" -Encoding utf8
+          "portas_4783x_antes=$((Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -ge 47821 -and $_.LocalPort -le 47845 } | ForEach-Object { "$($_.LocalAddress):$($_.LocalPort)" }) -join ' ')" | Out-File ci\resultado.txt -Append
           # --startup: abre como ao ligar o PC (só o notch, sem a tela de configurações).
           $p = Start-Process $exe -ArgumentList "--startup" -PassThru
           Start-Sleep 6

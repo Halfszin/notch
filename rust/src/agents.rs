@@ -163,8 +163,11 @@ mod win {
     pub fn setup(notch: &Notch, preferred: u16, token: String) {
         let weak = notch.as_weak();
         notch.on_perm_decide(move |choice| decide(&weak, &choice));
-        // Servidor só do próprio PC; tenta a porta salva e as 9 seguintes.
-        let Some((listener, port)) = (preferred..preferred + 10).find_map(|p| TcpListener::bind(("127.0.0.1", p)).ok().map(|l| (l, p))) else { return };
+        // Servidor só do próprio PC; tenta a porta salva e as 9 seguintes. Pula porta onde outro programa já
+        // atende: no Windows dá para abrir 127.0.0.1 numa porta que outro programa ouve em todas as redes, e aí
+        // o Orbi roubaria as conexões dele (derrubou a máquina do teste do GitHub).
+        let busy = |p: u16| TcpStream::connect_timeout(&std::net::SocketAddr::from(([127, 0, 0, 1], p)), Duration::from_millis(300)).is_ok();
+        let Some((listener, port)) = (preferred..preferred + 10).filter(|&p| !busy(p)).find_map(|p| TcpListener::bind(("127.0.0.1", p)).ok().map(|l| (l, p))) else { return };
         PORT.with(|p| p.set(port));
         let weak = notch.as_weak();
         std::thread::spawn(move || {
