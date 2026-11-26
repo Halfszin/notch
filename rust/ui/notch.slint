@@ -665,23 +665,43 @@ export component Notch inherits Window {
                         IconButton { glyph: "\u{E76B}"; size: 11px; clicked => { root.month-prev(); } }
                         IconButton { glyph: "\u{E76C}"; size: 11px; clicked => { root.month-next(); } }
                     }
-                    HorizontalLayout {
-                        height: root.compact ? 14px : self.preferred-height;
-                        for d in ["D", "S", "T", "Q", "Q", "S", "S"] : Text { text: d; color: #8E8E93; font-size: 11px; horizontal-alignment: center; }
-                    }
-                    for row in 6 : HorizontalLayout {
-                        for col in 7 : Rectangle {
-                            property <DayCell> cell: root.days[row * 7 + col];
-                            height: root.compact ? 17px : 21px;
-                            border-radius: 6px;
-                            background: self.cell.today ? white : transparent;
+                    // Grade com posições calculadas (7 colunas de largura igual): com layouts, a largura de cada
+                    // coluna dependia do texto e os números saíam tortos em relação às letras dos dias.
+                    Rectangle {
+                        property <length> cw: self.width / 7;
+                        property <length> hh: root.compact ? 14px : 18px;
+                        property <length> rh: root.compact ? 18px : 24px;
+                        height: self.hh + 6 * self.rh;
+                        for d[i] in ["D", "S", "T", "Q", "Q", "S", "S"] : Text {
+                            x: i * parent.cw;
+                            y: 0;
+                            width: parent.cw;
+                            height: parent.hh;
+                            text: d;
+                            color: #8E8E93;
+                            font-size: 11px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        for c[i] in root.days : Rectangle {
+                            x: mod(i, 7) * parent.cw;
+                            y: parent.hh + floor(i / 7) * parent.rh;
+                            width: parent.cw;
+                            height: parent.rh;
+                            // Hoje: pílula branca do tamanho do número, não da coluna inteira.
+                            if c.today : Rectangle {
+                                width: 32px;
+                                height: parent.height - 4px;
+                                border-radius: self.height / 2;
+                                background: white;
+                            }
                             Text {
                                 width: parent.width;
                                 height: parent.height;
-                                text: parent.cell.day;
+                                text: c.day;
                                 font-size: 12px;
-                                font-weight: parent.cell.today ? 700 : 400;
-                                color: parent.cell.today ? black : (parent.cell.in-month ? white : #48484A);
+                                font-weight: c.today ? 700 : 400;
+                                color: c.today ? black : (c.in-month ? white : #48484A);
                                 horizontal-alignment: center;
                                 vertical-alignment: center;
                             }
