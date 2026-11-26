@@ -166,14 +166,15 @@ jobs:
           '{"session_id":"s1","cwd":"C:\\proj\\meu-app","tool_name":"Edit","tool_input":{"file_path":"C:\\proj\\meu-app\\main.rs"}}' | Set-Content "$env:TEMP\pre.json" -Encoding ascii
           '{"session_id":"s1","cwd":"C:\\proj\\meu-app","tool_name":"Bash","tool_input":{"command":"cargo build --release"},"permission_suggestions":[]}' | Set-Content "$env:TEMP\perm.json" -Encoding ascii
           "agente_codigo_errado=$(curl.exe -s -o NUL -w '%{http_code}' --data-binary "@$env:TEMP\pre.json" "http://127.0.0.1:$($cfg.agent_port)/errado/PreToolUse")" | Out-File ci\resultado.txt -Append
-          curl.exe -s --data-binary "@$env:TEMP\pre.json" "$base/PreToolUse" | Out-Null
-          $permJob = Start-Job { param($u, $f) curl.exe -s -m 60 --data-binary "@$f" "$u/PermissionRequest" } -ArgumentList $base, "$env:TEMP\perm.json"
+          "agente_pretooluse=$(curl.exe -s -w ' http=%{http_code}' --data-binary "@$env:TEMP\pre.json" "$base/PreToolUse")" | Out-File ci\resultado.txt -Append
+          # O pedido de permissão fica esperando a decisão: roda em segundo plano e grava a resposta num arquivo.
+          $permProc = Start-Process curl.exe -ArgumentList "-s", "-m", "60", "-o", "$env:TEMP\perm-resp.txt", "--data-binary", "@$env:TEMP\perm.json", "$base/PermissionRequest" -PassThru -WindowStyle Hidden
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 900, 700
-          Start-Sleep 3
+          Start-Sleep 4
           Shot "21-permissao"
           Click (($w + 620) / 2 - 103) 147
-          $answer = Receive-Job $permJob -Wait
-          "agente_resposta=$answer" | Out-File ci\resultado.txt -Append
+          $null = $permProc.WaitForExit(65000)
+          "agente_resposta=$(if (Test-Path "$env:TEMP\perm-resp.txt") { Get-Content "$env:TEMP\perm-resp.txt" -Raw } else { 'nenhuma' })" | Out-File ci\resultado.txt -Append
           Start-Sleep 1
           Shot "22-depois-de-permitir"
           # Modo jogo: botão no topo do notch; fechado vira um risquinho e só abre com 2 s de mouse em cima.
