@@ -152,6 +152,9 @@ mod win {
     #[derive(Default)]
     struct Hub { sessions: HashMap<String, Session>, pending: Vec<Pending>, next_id: u64, five: Option<(f64, f64)>, week: Option<(f64, f64)> }
 
+    /// Eventos que chegaram e ainda não foram tratados pela interface (ela olha a cada 100 ms).
+    static QUEUE: std::sync::Mutex<Vec<(String, Value, mpsc::Sender<String>)>> = std::sync::Mutex::new(Vec::new());
+
     thread_local! {
         static HUB: RefCell<Hub> = RefCell::new(Hub::default());
         static PORT: std::cell::Cell<u16> = const { std::cell::Cell::new(0) };
@@ -163,6 +166,13 @@ mod win {
     pub fn setup(notch: &Notch, preferred: u16, token: String) {
         let weak = notch.as_weak();
         notch.on_perm_decide(move |choice| decide(&weak, &choice));
+        let weak = notch.as_weak();
+        let timer = slint::Timer::default();
+        timer.start(slint::TimerMode::Repeated, Duration::from_millis(100), move || {
+            let events: Vec<_> = std::mem::take(&mut *QUEUE.lock().unwrap());
+            for (evt, payload, tx) in events { handle(&weak, &evt, payload, tx); }
+        });
+        std::mem::forget(timer);
         // Servidor só do próprio PC; tenta a porta salva e as 9 seguintes. Pula porta onde outro programa já
         // atende: no Windows dá para abrir 127.0.0.1 numa porta que outro programa ouve em todas as redes, e aí
         // o Orbi roubaria as conexões dele (derrubou a máquina do teste do GitHub).
@@ -190,8 +200,8 @@ mod win {
         let (tx, rx) = mpsc::channel();
         let wait = if evt == "PermissionRequest" { 115 } else { 5 };
         log(&format!("recebido {evt}"));
-        let sent = slint::invoke_from_event_loop(move || handle(&weak, &evt, payload, tx));
-        if let Err(e) = sent { log(&format!("não chegou na interface: {e}")); }
+        let _ = weak; // a interface pega os eventos na fila (invoke_from_event_loop não entregava daqui)
+        QUEUE.lock().unwrap().push((evt, payload, tx));
         // Sem resposta a tempo: vazio, e o Claude Code pergunta no terminal como sempre.
         let answer = rx.recv_timeout(Duration::from_secs(wait)).unwrap_or_default();
         reply(&mut conn, 200, &answer)
