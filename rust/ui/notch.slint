@@ -475,7 +475,9 @@ export component Notch inherits Window {
         border-bottom-right-radius: root.edge != 2 ? self.r : 0;
         clip: true;
         // Fechado: preto. Música aberta: degradê do preto para a cor da capa (estilo Nusa).
-        background: root.open && root.music-glow ? @linear-gradient(180deg, #000000 0%, #000000 30%, root.accent 100%) : #000000;
+        // Chat do Claude: o mesmo degradê da música, na cor do Claude (escurecida como as capas).
+        background: root.open && root.chat-open && root.gradient-enabled ? @linear-gradient(180deg, #000000 0%, #000000 30%, #7A3E2C 100%)
+            : root.open && root.music-glow && !root.chat-open ? @linear-gradient(180deg, #000000 0%, #000000 30%, root.accent 100%) : #000000;
 
         ta := TouchArea {
             // Segurar e arrastar o fundo do notch: ele corre pela borda e pula para a borda mais perto.
