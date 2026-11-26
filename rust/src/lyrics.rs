@@ -42,8 +42,10 @@ pub fn index_at(lines: &[Line], t: f64) -> Option<usize> {
 /// Cliente HTTPS com o TLS do Windows (schannel): o ureq tenta Rustls por padrão e ele não está compilado.
 #[cfg(windows)]
 pub fn http() -> ureq::Agent {
-    use ureq::tls::{TlsConfig, TlsProvider};
-    ureq::Agent::config_builder().tls_config(TlsConfig::builder().provider(TlsProvider::NativeTls).build()).build().new_agent()
+    use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
+    // Certificados do próprio Windows: sem isso o ureq só aceita uma lista vazia e recusava sites como o LRCLIB.
+    let tls = TlsConfig::builder().provider(TlsProvider::NativeTls).root_certs(RootCerts::PlatformVerifier).build();
+    ureq::Agent::config_builder().tls_config(tls).build().new_agent()
 }
 
 /// Letra sincronizada no LRCLIB. O /api/get só responde com artista, música, álbum e duração exatos;
