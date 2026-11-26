@@ -274,7 +274,11 @@ pub fn show() {
         w.set_sounds(p.sounds);
         w.set_city(p.city.clone().into());
         w.set_city_status(if p.city.is_empty() { "Escreva sua cidade para ver o clima no topo do notch.".into() } else { format!("Mostrando o clima de {}.", p.city).into() });
-        if let Some(n) = NOTCH.with(|n| n.borrow().as_ref().and_then(|w| w.upgrade())) { refresh_agents(&n); }
+        // Direto na janela: aqui ela já está emprestada (chamar refresh_agents travava o Orbi).
+        let (connected, status) = agents_state();
+        w.set_agents_connected(connected);
+        w.set_agents_status(status.into());
+        if let Some(n) = NOTCH.with(|n| n.borrow().as_ref().and_then(|w| w.upgrade())) { n.set_agents_connected(connected); }
         set_page_list(w, &p.pages);
         w.set_start_with_windows(autostart());
         STATUS.with(|s| {
@@ -381,16 +385,23 @@ fn agents_switch(on: bool) {
     if let Some(n) = NOTCH.with(|n| n.borrow().as_ref().and_then(|w| w.upgrade())) { refresh_agents(&n); }
 }
 
-/// Conectado ou não (lendo o settings.json do Claude Code) no notch e na janela de configurações.
-pub fn refresh_agents(n: &Notch) {
+/// Conectado ou não (lendo o settings.json do Claude Code) e o texto que explica.
+fn agents_state() -> (bool, String) {
     let connected = read_claude().ok().flatten().is_some_and(|v| crate::agents::is_installed(&v));
-    n.set_agents_connected(connected);
     let msg = AGENTS_MSG.with(|m| m.borrow().clone());
     let status = if !msg.is_empty() { msg } else if connected {
         "Conectado: o Claude Code avisa o Orbi a cada passo e os pedidos de permissão aparecem no notch.".into()
     } else {
         "Liga os hooks do Claude Code (com cópia de segurança do settings.json). Funciona com a assinatura, sem chave de API.".into()
     };
+    (connected, status)
+}
+
+/// Atualiza o estado dos agentes no notch e na janela de configurações (se aberta).
+/// Não chamar com a janela emprestada (dentro de show): lá o estado vai direto na janela.
+pub fn refresh_agents(n: &Notch) {
+    let (connected, status) = agents_state();
+    n.set_agents_connected(connected);
     WINDOW.with(|w| if let Some(w) = &*w.borrow() { w.set_agents_connected(connected); w.set_agents_status(status.into()); });
 }
 
