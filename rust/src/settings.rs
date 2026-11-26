@@ -90,6 +90,17 @@ pub fn setup(notch: &Notch) {
     notch.set_edge(prefs.edge.clamp(0, 2));
     notch.set_edge_pos(prefs.edge_pos.clamp(0.0, 1.0));
     notch.set_game_mode(prefs.game_mode);
+    notch.set_lyrics_on(prefs.lyrics);
+    let weak = notch.as_weak();
+    notch.on_lyrics_toggled(move || {
+        let Some(n) = weak.upgrade() else { return };
+        let mut prefs = get();
+        prefs.lyrics = n.get_lyrics_on();
+        if !prefs.lyrics { n.set_has_lyrics(false); }
+        crate::store::save(FILE, &prefs);
+        WINDOW.with(|w| if let Some(w) = &*w.borrow() { w.set_lyrics(prefs.lyrics); });
+        PREFS.with(|p| *p.borrow_mut() = prefs);
+    });
     let weak = notch.as_weak();
     notch.on_game_toggled(move || {
         let Some(n) = weak.upgrade() else { return };
@@ -196,6 +207,7 @@ pub fn show() {
                     n.set_compact(prefs.compact);
                     n.set_edge(prefs.edge);
                     n.set_edge_pos(prefs.edge_pos);
+                    n.set_lyrics_on(prefs.lyrics);
                     if !prefs.lyrics { n.set_has_lyrics(false); }
                 }
                 PREFS.with(|p| *p.borrow_mut() = prefs);

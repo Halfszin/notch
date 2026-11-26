@@ -282,7 +282,9 @@ export component Notch inherits Window {
     in property <string> elapsed: "0:00";
     in property <string> remaining: "-0:00";
     in property <bool> has-lyrics;
-    in-out property <bool> show-lyrics: true;
+    // Letras ligadas (botões "Tocando | Letra" no topo da página da música; fica salvo).
+    in-out property <bool> lyrics-on: true;
+    callback lyrics-toggled();
     in property <string> lyric-prev;
     in property <string> lyric-now;
     in property <string> lyric-next;
@@ -477,11 +479,25 @@ export component Notch inherits Window {
             HorizontalLayout {
                 height: 24px;
                 spacing: 8px;
-                HorizontalLayout {
+                if root.page != 0 : HorizontalLayout {
                     width: 150px;
                     spacing: 4px;
                     Text { text: root.titles[root.page]; color: white; font-size: 14px; font-weight: 700; vertical-alignment: center; }
                     Text { text: root.subtitles[root.page]; color: #30D158; font-size: 14px; font-weight: 700; vertical-alignment: center; }
+                }
+                // Música: dois botões no lugar do título — só o player ou o player com a letra ao lado.
+                if root.page == 0 : HorizontalLayout {
+                    width: 150px;
+                    spacing: 10px;
+                    alignment: start;
+                    for opt[i] in ["Tocando", "Letra"] : Text {
+                        text: opt;
+                        font-size: 14px;
+                        font-weight: 700;
+                        color: (i == 1) == root.lyrics-on ? #30D158 : (lt.has-hover ? #AEAEB2 : #6E6E73);
+                        vertical-alignment: center;
+                        lt := TouchArea { mouse-cursor: pointer; clicked => { root.lyrics-on = i == 1; root.lyrics-toggled(); } }
+                    }
                 }
                 HorizontalLayout {
                     alignment: center;
@@ -509,11 +525,11 @@ export component Notch inherits Window {
                 // ---- página: música ----
                 if root.page == 0 : HorizontalLayout {
                     spacing: 16px;
-                    if !(root.show-lyrics && root.has-lyrics) : Avatar { width: root.compact ? 96px : 140px; look-x: root.look-x; look-y: root.look-y; pulse: root.playing ? root.level : 0; }
+                    if !(root.lyrics-on && root.has-lyrics) : Avatar { width: root.compact ? 96px : 140px; look-x: root.look-x; look-y: root.look-y; pulse: root.playing ? root.level : 0; }
                     VerticalLayout {
                         alignment: center;
                         spacing: 10px;
-                        width: root.show-lyrics && root.has-lyrics ? 260px : root.compact ? 340px : 360px;
+                        width: root.lyrics-on && root.has-lyrics ? 260px : root.compact ? 340px : 360px;
                         HorizontalLayout {
                             spacing: 12px;
                             Rectangle {
@@ -548,13 +564,13 @@ export component Notch inherits Window {
                             spacing: 6px;
                             // Caixas iguais dos dois lados: os botões de tocar ficam no meio mesmo com o volume aberto.
                             HorizontalLayout {
-                                width: root.show-lyrics && root.has-lyrics ? 60px : 100px;
+                                width: root.lyrics-on && root.has-lyrics ? 60px : 100px;
                                 alignment: end;
                                 if root.has-lyrics : IconButton {
                                     glyph: "\u{E8BD}";
                                     size: 14px;
-                                    tint: root.show-lyrics ? white : #FFFFFF88;
-                                    clicked => { root.show-lyrics = !root.show-lyrics; }
+                                    tint: root.lyrics-on ? white : #FFFFFF88;
+                                    clicked => { root.lyrics-on = !root.lyrics-on; root.lyrics-toggled(); }
                                 }
                             }
                             IconButton { glyph: "\u{E892}"; clicked => { root.previous(); } }
@@ -562,7 +578,7 @@ export component Notch inherits Window {
                             IconButton { glyph: "\u{E893}"; clicked => { root.next(); } }
                             Rectangle {
                                 // Com a letra ao lado a coluna é estreita: o volume aberto avança um pouco para a direita.
-                                width: root.show-lyrics && root.has-lyrics ? 60px : 100px;
+                                width: root.lyrics-on && root.has-lyrics ? 60px : 100px;
                                 VolumeHover {
                                     x: 0;
                                     value <=> root.volume;
@@ -573,7 +589,7 @@ export component Notch inherits Window {
                         }
                     }
                     // Letra: a linha cantada acesa, as outras apagadas.
-                    if root.show-lyrics && root.has-lyrics : HorizontalLayout {
+                    if root.lyrics-on && root.has-lyrics : HorizontalLayout {
                         spacing: 16px;
                         Rectangle { width: 1px; background: #FFFFFF22; }
                         VerticalLayout {
@@ -797,7 +813,13 @@ export component Notch inherits Window {
                             Text { text: g.d; color: #8E8E93; font-size: 10.5px; horizontal-alignment: center; }
                         }
                     }
-                    Text { text: "\u{E7F6}  " + root.audio-device; font-family: "Segoe UI"; color: #8E8E93; font-size: 11.5px; horizontal-alignment: center; }
+                    // Ícone do fone na fonte de ícones (na fonte de texto ele virava um quadradinho).
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 6px;
+                        Text { text: "\u{E7F6}"; font-family: "Segoe MDL2 Assets"; color: #8E8E93; font-size: 12px; vertical-alignment: center; }
+                        Text { text: root.audio-device; color: #8E8E93; font-size: 11.5px; vertical-alignment: center; }
+                    }
                 }
 
                 // ---- página: atalhos ----
