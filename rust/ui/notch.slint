@@ -186,19 +186,27 @@ export component Notch inherits Window {
     in property <string> side-text;
     // Onde na borda (0 a 1: da esquerda para a direita no topo, de cima para baixo nas laterais). Só o Rust usa.
     in-out property <float> edge-pos: 0.5;
+    // Modo jogo (botão no notch): fechado vira só um risquinho preto e só abre com o mouse 2 s em cima.
+    in-out property <bool> game-mode;
+    callback game-toggled();
+    // Volume do PC (0 a 1), na página da música.
+    in-out property <float> volume: 0.5;
+    // Segurando a barra de volume: o Rust não sobrescreve com o valor do Windows enquanto você arrasta.
+    in-out property <bool> volume-held;
+    callback volume-changed(float);
     // Arrastando o notch pela borda: fica fechado enquanto anda.
     in property <bool> dragging;
     callback drag-start();
     callback drag-move();
     callback drag-end();
     // Como no Orbi em C#: barrinhas só enquanto toca; sem música o notch volta ao tamanho de só anel + hora.
-    out property <length> closed-width: root.side ? 34px : root.playing ? 160px : 132px;
+    out property <length> closed-width: root.side ? (root.game-mode ? 6px : 34px) : root.game-mode ? 70px : root.playing ? 160px : 132px;
     // Visualizador (como o Wallpaper Engine): 4 faixas do som e o grave, que faz o notch fechado pulsar.
     in property <[float]> bands: [0, 0, 0, 0, 0];
     in property <float> level;
     // Batida (0 a 1): salta no bumbo e cai rápido.
     in property <float> pulse;
-    out property <length> closed-height: !root.side ? 32px : root.playing ? 116px : 92px;
+    out property <length> closed-height: root.game-mode ? (root.side ? 70px : 6px) : !root.side ? 32px : root.playing ? 116px : 92px;
 
     in-out property <bool> adding;
     // O Rust decide pela posição do mouse (não depende do aviso de "mouse em cima" da janela).
@@ -310,7 +318,7 @@ export component Notch inherits Window {
     animate pill-w, pill-h { duration: 420ms; easing: ease-out-back; }
     // Como no Orbi em C#: fechado, o notch inteiro (anel, barrinhas e hora juntos) cresce com o grave
     // e dá um tranco na batida; aberto fica parado para não atrapalhar os botões.
-    property <float> beat-scale: root.open ? 1 : 1 + 0.04 * root.level + 0.05 * root.pulse;
+    property <float> beat-scale: root.open || root.game-mode ? 1 : 1 + 0.04 * root.level + 0.05 * root.pulse;
     pill := Rectangle {
         width: root.pill-w;
         height: root.pill-h;
@@ -319,7 +327,7 @@ export component Notch inherits Window {
         transform-origin: root.edge == 1 ? { x: 0, y: self.height / 2 } : root.edge == 2 ? { x: self.width, y: self.height / 2 } : { x: self.width / 2, y: 0 };
         x: root.edge == 1 ? 0 : root.edge == 2 ? root.width - self.width : (root.width - self.width) / 2;
         y: root.side ? (root.height - self.height) / 2 : 0;
-        property <length> r: root.open ? 30px : 16px;
+        property <length> r: root.open ? 30px : root.game-mode && !root.toasting ? 3px : 16px;
         border-top-left-radius: root.edge == 2 ? self.r : 0;
         border-top-right-radius: root.edge == 1 ? self.r : 0;
         border-bottom-left-radius: root.edge != 1 ? self.r : 0;
@@ -345,7 +353,7 @@ export component Notch inherits Window {
 
         // ---- fechado: anel da bateria + hora (ou o timer, quando corre) ----
         if root.side : VerticalLayout {
-            opacity: root.open || root.toasting ? 0 : 1;
+            opacity: root.open || root.toasting || root.game-mode ? 0 : 1;
             animate opacity { duration: 150ms; }
             alignment: center;
             spacing: 6px;
@@ -354,7 +362,7 @@ export component Notch inherits Window {
             Text { text: root.side-text; color: root.focus-running ? #FF9F0A : white; font-size: 13px; font-weight: 600; horizontal-alignment: center; }
         }
         if !root.side : HorizontalLayout {
-            opacity: root.open || root.toasting ? 0 : 1;
+            opacity: root.open || root.toasting || root.game-mode ? 0 : 1;
             animate opacity { duration: 150ms; }
             alignment: center;
             spacing: 0px; // os 6 px entre anel, barrinhas e hora ficam dentro da caixa das barrinhas
@@ -363,10 +371,11 @@ export component Notch inherits Window {
             Ring { value: root.battery; tint: root.ring-color; bolt: root.charging; }
             // Barrinhas entram e saem encolhendo junto com o notch (antes sumiam de uma vez e o anel pulava).
             Rectangle {
-                width: root.playing ? closed-bars.preferred-width + 12px : 6px;
+                // 5 barrinhas de 3 px + 4 vãos de 2 px = 23 px, com 7 px de folga de cada lado.
+                width: root.playing ? 23px + 14px : 6px;
                 animate width { duration: 300ms; easing: ease-out; }
                 clip: true;
-                closed-bars := AudioBars { x: 6px; playing: true; bands: root.bands; tint: #30D158; opacity: root.playing ? 1 : 0; animate opacity { duration: 200ms; } }
+                closed-bars := AudioBars { x: 7px; width: 23px; playing: true; bands: root.bands; tint: #30D158; opacity: root.playing ? 1 : 0; animate opacity { duration: 200ms; } }
             }
             Text { text: root.closed-text; color: root.focus-running ? #FF9F0A : white; font-size: 13px; font-weight: 600; vertical-alignment: center; }
         }
@@ -417,6 +426,8 @@ export component Notch inherits Window {
                     // Barrinhas só com música tocando (parado eram só 4 pontinhos sem uso).
                     if root.playing : AudioBars { playing: true; }
                     // Na fonte de ícones a engrenagem desenha menor que o X: tamanhos diferentes para ficarem iguais na tela.
+                    // Modo jogo: verde quando ligado.
+                    IconButton { glyph: "\u{E7FC}"; size: 14px; tint: root.game-mode ? #30D158 : #AEAEB2; width: 26px; height: 24px; clicked => { root.game-mode = !root.game-mode; root.game-toggled(); } }
                     IconButton { glyph: "\u{E713}"; size: 13px; tint: #AEAEB2; width: 26px; height: 24px; clicked => { root.open-settings(); } }
                     IconButton { glyph: "\u{E711}"; size: 11px; tint: #AEAEB2; width: 26px; height: 24px; clicked => { root.quit(); } }
                 }
@@ -473,6 +484,29 @@ export component Notch inherits Window {
                             IconButton { glyph: "\u{E892}"; clicked => { root.previous(); } }
                             IconButton { glyph: root.playing ? "\u{E769}" : "\u{E768}"; size: 19px; tint: white; clicked => { root.play-pause(); } }
                             IconButton { glyph: "\u{E893}"; clicked => { root.next(); } }
+                        }
+                        // Volume do PC: clicar ou arrastar na barra.
+                        HorizontalLayout {
+                            spacing: 10px;
+                            height: 16px;
+                            Text { text: root.volume < 0.01 ? "\u{E74F}" : "\u{E767}"; font-family: "Segoe MDL2 Assets"; font-size: 12px; color: #FFFFFFCC; width: 36px; vertical-alignment: center; }
+                            Rectangle {
+                                Rectangle { y: 6px; height: 4px; border-radius: 2px; background: #FFFFFF33; }
+                                Rectangle { x: 0; y: 6px; height: 4px; width: parent.width * clamp(root.volume, 0, 1); border-radius: 2px; background: white; }
+                                Rectangle {
+                                    width: 12px; height: 12px; border-radius: 6px; background: white; y: 2px;
+                                    x: parent.width * clamp(root.volume, 0, 1) - self.width / 2;
+                                }
+                                vol-ta := TouchArea {
+                                    mouse-cursor: pointer;
+                                    pointer-event(e) => {
+                                        if (e.kind == PointerEventKind.down) { root.volume-held = true; root.volume = clamp(self.mouse-x / self.width, 0, 1); root.volume-changed(root.volume); }
+                                        if (e.kind == PointerEventKind.up) { root.volume-held = false; }
+                                    }
+                                    moved => { if (self.pressed) { root.volume = clamp(self.mouse-x / self.width, 0, 1); root.volume-changed(root.volume); } }
+                                }
+                            }
+                            Text { text: round(root.volume * 100) + "%"; color: #FFFFFFCC; font-size: 11px; width: 40px; horizontal-alignment: right; vertical-alignment: center; }
                         }
                     }
                     // Letra: a linha cantada acesa, as outras apagadas.

@@ -99,8 +99,11 @@ pub fn setup(notch: &Notch) {
         }
     });
 
+    notch.on_volume_changed(|v| crate::winapi::set_master_volume(v));
+
     let weak = notch.as_weak();
     let hit = std::rc::Rc::new(std::cell::Cell::new(true));
+    let hover_since: std::rc::Rc<std::cell::Cell<Option<std::time::Instant>>> = Default::default();
     let placed: std::rc::Rc<std::cell::Cell<Option<(i32, f32)>>> = Default::default();
     let fast = Timer::default();
     fast.start(TimerMode::Repeated, Duration::from_millis(30), move || {
@@ -125,7 +128,10 @@ pub fn setup(notch: &Notch) {
             // Margem de 2 px do lado da borda da tela: encostar o mouse na borda também abre.
             let (ml, mr, mt) = match edge { 1 => (2.0, 0.0, 0.0), 2 => (0.0, 2.0, 0.0), _ => (0.0, 0.0, 2.0) };
             let inside = cx >= left - ml && cx <= left + pw + mr && cy >= top - mt && cy <= top + ph;
-            n.set_hovered(inside);
+            // Modo jogo: fechado, só abre com o mouse parado em cima por 2 s (botões de jogo no meio da tela).
+            if !inside { hover_since.set(None); } else if hover_since.get().is_none() { hover_since.set(Some(std::time::Instant::now())); }
+            let waited = hover_since.get().is_some_and(|t| t.elapsed() >= Duration::from_secs(2));
+            n.set_hovered(inside && (!n.get_game_mode() || n.get_open() || waited));
 
             let open = n.get_open();
             // A janela fica sempre do tamanho do notch aberto (mudar o tamanho dela no meio da animação
@@ -224,6 +230,9 @@ pub fn setup(notch: &Notch) {
         let Some(n) = weak.upgrade() else { return };
         let (clock, date) = now_text();
         n.set_clock(clock.into());
+        if !n.get_volume_held() {
+            if let Some(v) = crate::winapi::master_volume() { n.set_volume(v); }
+        }
         // Nas laterais a hora fica em pé ("19" em cima de "54").
         n.set_side_text(n.get_closed_text().replace(':', "\n").into());
         n.set_date_text(date.into());

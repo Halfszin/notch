@@ -101,6 +101,26 @@ pub fn audio_output_name() -> Option<String> {
     }
 }
 
+/// Controle de volume geral da saída de som padrão (o do ícone de som da barra de tarefas).
+fn endpoint_volume() -> Option<windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume> {
+    use windows::Win32::Media::Audio::{eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator};
+    use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+    unsafe {
+        let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+        en.GetDefaultAudioEndpoint(eRender, eConsole).ok()?.Activate(CLSCTX_ALL, None).ok()
+    }
+}
+
+pub fn master_volume() -> Option<f32> {
+    unsafe { endpoint_volume()?.GetMasterVolumeLevelScalar().ok() }
+}
+
+pub fn set_master_volume(v: f32) {
+    if let Some(e) = endpoint_volume() {
+        unsafe { let _ = e.SetMasterVolumeLevelScalar(v.clamp(0.0, 1.0), std::ptr::null()); }
+    }
+}
+
 /// Medidor de volume da saída de som padrão (o mesmo do mixer do Windows).
 pub fn peak_meter() -> Option<windows::Win32::Media::Audio::Endpoints::IAudioMeterInformation> {
     use windows::Win32::Media::Audio::{eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator};

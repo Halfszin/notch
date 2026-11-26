@@ -25,6 +25,8 @@ pub struct Prefs {
     /// Borda (0 = topo, 1 = esquerda, 2 = direita) e onde nela (0 a 1), como no Orbi em C#.
     pub edge: i32,
     pub edge_pos: f32,
+    /// Modo jogo (ligado pelo botão do próprio notch).
+    pub game_mode: bool,
     /// Páginas na ordem das bolinhas (id = posição na lista PAGES) e se aparecem.
     pub pages: Vec<PageCfg>,
 }
@@ -41,7 +43,7 @@ const PAGES: [&str; 8] = ["Tocando", "Tarefas", "Foco", "Calendário", "Notas", 
 impl Default for Prefs {
     fn default() -> Self {
         Prefs {
-            battery_alerts: true, audio_alerts: true, reminders: true, lyrics: true, gradient: true, auto_update: true, compact: false, edge: 0, edge_pos: 0.5,
+            battery_alerts: true, audio_alerts: true, reminders: true, lyrics: true, gradient: true, auto_update: true, compact: false, edge: 0, edge_pos: 0.5, game_mode: false,
             pages: (0..PAGES.len()).map(|id| PageCfg { id, visible: true }).collect(),
         }
     }
@@ -84,6 +86,15 @@ pub fn setup(notch: &Notch) {
     notch.set_compact(prefs.compact);
     notch.set_edge(prefs.edge.clamp(0, 2));
     notch.set_edge_pos(prefs.edge_pos.clamp(0.0, 1.0));
+    notch.set_game_mode(prefs.game_mode);
+    let weak = notch.as_weak();
+    notch.on_game_toggled(move || {
+        let Some(n) = weak.upgrade() else { return };
+        let mut prefs = get();
+        prefs.game_mode = n.get_game_mode();
+        crate::store::save(FILE, &prefs);
+        PREFS.with(|p| *p.borrow_mut() = prefs);
+    });
     apply_pages(notch, &prefs.pages);
     updater::AUTO.store(prefs.auto_update, Ordering::Relaxed);
     NOTCH.with(|n| *n.borrow_mut() = Some(notch.as_weak()));
@@ -170,6 +181,7 @@ pub fn show() {
                     // Trocou de borda nas configurações: começa no meio dela.
                     edge: w.get_edge(),
                     edge_pos: if w.get_edge() == get().edge { get().edge_pos } else { 0.5 },
+                    game_mode: get().game_mode,
                     pages: get().pages,
                 };
                 crate::store::save(FILE, &prefs);
