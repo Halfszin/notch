@@ -30,6 +30,9 @@ pub struct Prefs {
     /// WhatsApp e Discord no notch, e sons dos avisos.
     pub app_notifications: bool,
     pub sounds: bool,
+    /// Servidor dos agentes do Claude Code: porta (diferente da do Orbi em C#, que usa 47821) e código secreto.
+    pub agent_port: u16,
+    pub agent_token: String,
     /// Páginas na ordem das bolinhas (id = posição na lista PAGES) e se aparecem.
     pub pages: Vec<PageCfg>,
 }
@@ -41,12 +44,12 @@ pub struct PageCfg {
 }
 
 /// Nomes das páginas, na ordem dos ids da interface (titles do notch.slint).
-const PAGES: [&str; 8] = ["Tocando", "Tarefas", "Foco", "Calendário", "Notas", "Copiados", "Sistema", "Atalhos"];
+const PAGES: [&str; 9] = ["Tocando", "Tarefas", "Foco", "Calendário", "Notas", "Copiados", "Sistema", "Atalhos", "Agentes"];
 
 impl Default for Prefs {
     fn default() -> Self {
         Prefs {
-            battery_alerts: true, audio_alerts: true, reminders: true, lyrics: true, gradient: true, auto_update: true, compact: false, edge: 0, edge_pos: 0.5, game_mode: false, app_notifications: true, sounds: true,
+            battery_alerts: true, audio_alerts: true, reminders: true, lyrics: true, gradient: true, auto_update: true, compact: false, edge: 0, edge_pos: 0.5, game_mode: false, app_notifications: true, sounds: true, agent_port: 47831, agent_token: String::new(),
             pages: (0..PAGES.len()).map(|id| PageCfg { id, visible: true }).collect(),
         }
     }
@@ -71,6 +74,11 @@ thread_local! {
     static PREFS: RefCell<Prefs> = RefCell::new({
         let mut p: Prefs = crate::store::load(FILE);
         p.pages = fix_pages(&p.pages);
+        if p.agent_token.len() < 16 {
+            // Código secreto que vai no endereço dos hooks: sem ele o Orbi recusa o evento.
+            p.agent_token = format!("{:032x}", unsafe { windows::Win32::System::Com::CoCreateGuid() }.map(|g| g.to_u128()).unwrap_or(0));
+            crate::store::save(FILE, &p);
+        }
         p
     });
     static NOTCH: RefCell<Option<Weak<Notch>>> = const { RefCell::new(None) };
@@ -198,6 +206,8 @@ pub fn show() {
                     game_mode: get().game_mode,
                     app_notifications: w.get_app_notifications(),
                     sounds: w.get_sounds(),
+                    agent_port: get().agent_port,
+                    agent_token: get().agent_token,
                     pages: get().pages,
                 };
                 crate::store::save(FILE, &prefs);
@@ -225,6 +235,8 @@ pub fn show() {
                 let (a, b) = (i as usize, (i + dir) as usize);
                 if a < p.len() && b < p.len() { p.swap(a, b); }
             }));
+            w.on_agents_connect(|| agents_switch(true));
+            w.on_agents_disconnect(|| agents_switch(false));
             w.on_check_update(updater::check_now);
             w.on_restart_update(updater::restart);
             w.on_quit(|| { let _ = slint::quit_event_loop(); });
@@ -247,6 +259,7 @@ pub fn show() {
         w.set_edge(p.edge);
         w.set_app_notifications(p.app_notifications);
         w.set_sounds(p.sounds);
+        if let Some(n) = NOTCH.with(|n| n.borrow().as_ref().and_then(|w| w.upgrade())) { refresh_agents(&n); }
         set_page_list(w, &p.pages);
         w.set_start_with_windows(autostart());
         STATUS.with(|s| {
@@ -264,6 +277,70 @@ pub fn show() {
             }
         });
     });
+}
+
+// ---------- agentes do Claude Code (hooks no settings.json dele) ----------
+
+fn claude_settings() -> std::path::PathBuf {
+    let dir = std::env::var_os("CLAUDE_CONFIG_DIR").filter(|d| !d.is_empty()).map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(std::env::var_os("USERPROFILE").unwrap_or_default()).join(".claude"));
+    dir.join("settings.json")
+}
+
+/// settings.json do Claude Code: None se não existe; erro se não dá para ler como JSON (aí nada é alterado).
+fn read_claude() -> Result<Option<serde_json::Value>, String> {
+    let path = claude_settings();
+    let Ok(text) = std::fs::read_to_string(&path) else { return Ok(None) };
+    if text.trim().is_empty() { return Ok(None); }
+    serde_json::from_str(&text).map(Some).map_err(|e| format!("não deu para ler o settings.json do Claude Code ({e}); nada foi alterado"))
+}
+
+/// Grava com cópia de segurança do arquivo anterior e troca atômica (.tmp → final).
+fn write_claude(value: &serde_json::Value, backup: bool) -> Result<(), String> {
+    let path = claude_settings();
+    if let Some(dir) = path.parent() { std::fs::create_dir_all(dir).map_err(|e| e.to_string())?; }
+    if backup {
+        let stamp = crate::system::now().iso().replace([':', '-'], "").replace('T', "-");
+        std::fs::copy(&path, path.with_extension(format!("json.orbi-backup-{stamp}"))).map_err(|e| e.to_string())?;
+    }
+    let tmp = path.with_extension("json.orbi-tmp");
+    std::fs::write(&tmp, serde_json::to_string_pretty(value).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
+}
+
+thread_local! { static AGENTS_MSG: RefCell<String> = const { RefCell::new(String::new()) }; }
+
+fn agents_switch(on: bool) {
+    let result = (|| -> Result<String, String> {
+        let current = read_claude()?;
+        let had_file = current.is_some();
+        if on {
+            let port = crate::agents::port();
+            if port == 0 { return Err("o Orbi não conseguiu abrir a porta dos agentes".into()); }
+            let (merged, status) = crate::agents::merge(current, port, &get().agent_token)?;
+            write_claude(&merged, had_file)?;
+            Ok(format!("Conectado. Abra (ou reabra) o Claude Code para ele começar a avisar o Orbi.{}",
+                if status { "" } else { " Sua status line foi mantida, então os limites do plano não aparecem." }))
+        } else {
+            if let Some(cur) = current { write_claude(&crate::agents::unmerge(cur), true)?; }
+            Ok("Desconectado: os hooks do Orbi saíram do Claude Code.".into())
+        }
+    })();
+    AGENTS_MSG.with(|m| *m.borrow_mut() = match result { Ok(t) => t, Err(e) => format!("Não deu: {e}") });
+    if let Some(n) = NOTCH.with(|n| n.borrow().as_ref().and_then(|w| w.upgrade())) { refresh_agents(&n); }
+}
+
+/// Conectado ou não (lendo o settings.json do Claude Code) no notch e na janela de configurações.
+pub fn refresh_agents(n: &Notch) {
+    let connected = read_claude().ok().flatten().is_some_and(|v| crate::agents::is_installed(&v));
+    n.set_agents_connected(connected);
+    let msg = AGENTS_MSG.with(|m| m.borrow().clone());
+    let status = if !msg.is_empty() { msg } else if connected {
+        "Conectado: o Claude Code avisa o Orbi a cada passo e os pedidos de permissão aparecem no notch.".into()
+    } else {
+        "Liga os hooks do Claude Code (com cópia de segurança do settings.json). Funciona com a assinatura, sem chave de API.".into()
+    };
+    WINDOW.with(|w| if let Some(w) = &*w.borrow() { w.set_agents_connected(connected); w.set_agents_status(status.into()); });
 }
 
 // ---------- páginas do notch ----------
@@ -301,10 +378,10 @@ mod tests {
     fn fix_pages_repara_lista() {
         let bad = vec![PageCfg { id: 3, visible: false }, PageCfg { id: 3, visible: true }, PageCfg { id: 0, visible: false }, PageCfg { id: 99, visible: true }];
         let fixed = fix_pages(&bad);
-        assert_eq!(fixed.len(), 8);
+        assert_eq!(fixed.len(), 9);
         assert_eq!(fixed[0], PageCfg { id: 3, visible: false });
         assert_eq!(fixed[1], PageCfg { id: 0, visible: true }); // música sempre visível
-        assert_eq!(fixed.iter().map(|p| p.id).collect::<std::collections::BTreeSet<_>>().len(), 8);
+        assert_eq!(fixed.iter().map(|p| p.id).collect::<std::collections::BTreeSet<_>>().len(), 9);
     }
 }
 

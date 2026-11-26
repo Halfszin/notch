@@ -3,6 +3,7 @@
 
 slint::include_modules!();
 
+mod agents;
 mod color;
 mod lyrics;
 mod pages;
@@ -68,6 +69,9 @@ fn run() -> Result<(), slint::PlatformError> {
         pages::setup(&notch);
         features::setup(&notch);
         settings::setup(&notch);
+        let p = settings::get();
+        agents::setup(&notch, p.agent_port, p.agent_token);
+        settings::refresh_agents(&notch);
     }
     notch.run()
 }

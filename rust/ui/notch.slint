@@ -4,6 +4,7 @@ import { LineEdit, TextEdit } from "std-widgets.slint";
 export struct TaskRow { title: string, done: bool, due: string }
 export struct DayCell { day: int, in-month: bool, today: bool }
 export struct ShortcutItem { name: string, glyph: string, tint: color }
+export struct AgentRow { project: string, status: string, busy: bool }
 export struct PageEntry { name: string, visible: bool, fixed: bool }
 
 // Anel da bateria: trilho + arco no sentido horário a partir do topo.
@@ -260,7 +261,8 @@ export component Notch inherits Window {
     in-out property <bool> adding;
     // O Rust decide pela posição do mouse (não depende do aviso de "mouse em cima" da janela).
     in property <bool> hovered;
-    out property <bool> open: !root.dragging && (root.hovered || ta.has-hover || root.adding || root.notes-focused);
+    // Pedido de permissão do Claude Code abre o notch sozinho (menos no modo jogo).
+    out property <bool> open: !root.dragging && (root.hovered || ta.has-hover || root.adding || root.notes-focused || (root.perm-visible && !root.game-mode));
     callback quit();
     callback open-settings();
     in property <bool> gradient-enabled: true;
@@ -297,12 +299,27 @@ export component Notch inherits Window {
 
     // páginas: 0 música, 1 tarefas, 2 foco
     // Páginas visíveis e em que ordem (configurações). pos = qual bolinha; page = qual página é.
-    in property <[int]> order: [0, 1, 2, 3, 4, 5, 6, 7];
+    in property <[int]> order: [0, 1, 2, 3, 4, 5, 6, 7, 8];
     in-out property <int> pos: 0;
     out property <int> page: root.order[min(root.pos, root.order.length - 1)];
     property <int> pages: root.order.length;
-    property <[string]> titles: ["Tocando", "Tarefas", "Foco", "Calendário", "Notas", "Copiados", "Sistema", "Atalhos"];
-    property <[string]> subtitles: ["agora", "hoje", "timer", "do mês", "rápidas", "recentes", "agora", "rápidos"];
+    property <[string]> titles: ["Tocando", "Tarefas", "Foco", "Calendário", "Notas", "Copiados", "Sistema", "Atalhos", "Agentes"];
+    property <[string]> subtitles: ["agora", "hoje", "timer", "do mês", "rápidas", "recentes", "agora", "rápidos", "Claude Code"];
+
+    // Agentes do Claude Code (página 8): sessões, limites do plano e o pedido de permissão da vez.
+    in property <[AgentRow]> agent-rows;
+    in property <bool> agents-busy;
+    in property <bool> agents-connected;
+    in property <bool> perm-visible;
+    in property <string> perm-project;
+    in property <string> perm-what;
+    in property <string> perm-code;
+    in property <int> perm-count;
+    callback perm-decide(string);
+    in property <float> plan-five: -1;
+    in property <string> plan-five-text;
+    in property <float> plan-week: -1;
+    in property <string> plan-week-text;
 
     // tarefas
     in property <[TaskRow]> tasks;
@@ -882,6 +899,78 @@ export component Notch inherits Window {
                         }
                     }
                 }
+
+                // ---- página: agentes do Claude Code ----
+                if root.page == 8 : VerticalLayout {
+                    spacing: 8px;
+                    if root.perm-visible : Rectangle {
+                        border-radius: 14px;
+                        background: #1C1C20;
+                        VerticalLayout {
+                            padding: 12px;
+                            spacing: 8px;
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Text { text: "\u{E72E}"; font-family: "Segoe MDL2 Assets"; font-size: 14px; color: #FF9F0A; vertical-alignment: center; }
+                                Text { text: root.perm-what; color: white; font-size: 14px; font-weight: 700; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                                Text { text: root.perm-project + (root.perm-count > 1 ? "  ·  +" + (root.perm-count - 1) : ""); color: #8E8E93; font-size: 12px; vertical-alignment: center; }
+                            }
+                            Rectangle {
+                                border-radius: 8px;
+                                background: #0E0E10;
+                                min-height: 44px;
+                                Text { x: 10px; width: parent.width - 20px; text: root.perm-code; font-family: "Consolas"; font-size: 12px; color: #E5E5EA; wrap: word-wrap; overflow: elide; vertical-alignment: center; }
+                            }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                alignment: end;
+                                Pill { glyph: "\u{E711}"; label: "Negar"; clicked => { root.perm-decide("deny"); } }
+                                Pill { glyph: "\u{E8FB}"; label: "Sempre"; clicked => { root.perm-decide("always"); } }
+                                Pill { glyph: "\u{E73E}"; label: "Permitir"; primary: true; clicked => { root.perm-decide("allow"); } }
+                            }
+                        }
+                    }
+                    if !root.perm-visible && root.agent-rows.length == 0 : VerticalLayout {
+                        alignment: center;
+                        spacing: 4px;
+                        vertical-stretch: 1;
+                        Text { text: root.agents-connected ? "Nenhuma sessão do Claude Code agora" : "Claude Code não está conectado"; color: white; font-size: 14px; font-weight: 600; horizontal-alignment: center; }
+                        Text { text: root.agents-connected ? "Abra o Claude Code: as sessões, o que ele está fazendo e os pedidos de permissão aparecem aqui." : "Conecte em Configurações → Agentes."; color: #8E8E93; font-size: 12px; horizontal-alignment: center; wrap: word-wrap; }
+                    }
+                    if !root.perm-visible && root.agent-rows.length > 0 : Flickable {
+                        vertical-stretch: 1;
+                        content-height: agent-list.preferred-height;
+                        agent-list := VerticalLayout {
+                            alignment: start;
+                            spacing: 4px;
+                            for a in root.agent-rows : Rectangle {
+                                height: 32px;
+                                border-radius: 8px;
+                                background: #1C1C20;
+                                HorizontalLayout {
+                                    padding-left: 10px;
+                                    padding-right: 10px;
+                                    spacing: 8px;
+                                    Rectangle { width: 8px; height: 8px; y: 12px; border-radius: 4px; background: a.busy ? #0A84FF : #30D158; }
+                                    Text { text: a.project; color: white; font-size: 12.5px; font-weight: 600; vertical-alignment: center; }
+                                    Text { text: a.status; color: #AEAEB2; font-size: 12px; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                                }
+                            }
+                        }
+                    }
+                    // Limites do plano (vêm da status line do Claude Code).
+                    for w in [{ n: "5 horas", v: root.plan-five, t: root.plan-five-text }, { n: "Semana", v: root.plan-week, t: root.plan-week-text }] : HorizontalLayout {
+                        visible: w.v >= 0;
+                        height: w.v >= 0 ? 16px : 0px;
+                        spacing: 10px;
+                        Text { text: w.n; width: 56px; color: #AEAEB2; font-size: 11.5px; vertical-alignment: center; }
+                        Rectangle {
+                            Rectangle { y: 6px; height: 4px; border-radius: 2px; background: #FFFFFF22; }
+                            Rectangle { x: 0; y: 6px; height: 4px; border-radius: 2px; width: parent.width * clamp(w.v, 0, 1); background: w.v > 0.85 ? #FF453A : w.v > 0.6 ? #FFD60A : #30D158; }
+                        }
+                        Text { text: w.t; width: 140px; color: #AEAEB2; font-size: 11.5px; horizontal-alignment: right; vertical-alignment: center; }
+                    }
+                }
             }
 
             // Bolinhas das páginas (clique para trocar).
@@ -1031,6 +1120,10 @@ export component Settings inherits Window {
     in-out property <int> edge;
     in-out property <bool> app-notifications: true;
     in-out property <bool> sounds: true;
+    in property <bool> agents-connected;
+    in property <string> agents-status;
+    callback agents-connect();
+    callback agents-disconnect();
     in property <string> version;
     in property <string> update-status;
     in property <bool> update-ready;
@@ -1050,13 +1143,14 @@ export component Settings inherits Window {
         { glyph: "\u{E8A9}", text: "Páginas" },
         { glyph: "\u{E790}", text: "Aparência" },
         { glyph: "\u{EA8F}", text: "Notificações" },
+        { glyph: "\u{E99A}", text: "Agentes" },
         { glyph: "\u{E895}", text: "Atualizações" },
         { glyph: "\u{E7E8}", text: "App" },
     ];
     // Clicar no menu rola até a seção (como no Orbi em C#).
     function go(i: int) {
         root.section = i;
-        let y = i == 0 ? s0.y : i == 1 ? sp.y : i == 2 ? s1.y : i == 3 ? s2.y : i == 4 ? s3.y : s4.y;
+        let y = i == 0 ? s0.y : i == 1 ? sp.y : i == 2 ? s1.y : i == 3 ? s2.y : i == 4 ? sa.y : i == 5 ? s3.y : s4.y;
         flick.content-y = max(-(y - 8px), flick.height - flick.content-height);
     }
 
@@ -1284,6 +1378,17 @@ export component Settings inherits Window {
                                 sub: "Tarefas com hora (ex.: \"ligar pro banco às 15h\") avisam no notch.";
                                 checked <=> root.reminders;
                                 toggled => { root.changed(); }
+                            }
+                        }
+
+                        sa := SectionLabel { text: "AGENTES (CLAUDE CODE)"; height: 46px; vertical-alignment: bottom; }
+                        Rectangle { height: 10px; }
+                        Card {
+                            Row {
+                                title: "Sessões, permissões e limites do plano no notch";
+                                sub: root.agents-status;
+                                if root.agents-connected : VerticalLayout { alignment: center; PillButton { text: "Desconectar"; clicked => { root.agents-disconnect(); } } }
+                                if !root.agents-connected : VerticalLayout { alignment: center; PillButton { text: "Conectar"; primary: true; clicked => { root.agents-connect(); } } }
                             }
                         }
 
