@@ -111,13 +111,66 @@ fn endpoint_volume() -> Option<windows::Win32::Media::Audio::Endpoints::IAudioEn
     }
 }
 
-pub fn master_volume() -> Option<f32> {
-    unsafe { endpoint_volume()?.GetMasterVolumeLevelScalar().ok() }
+/// Volumes das sessões de som do Spotify no mixer do Windows (o Spotify abre mais de uma).
+pub fn spotify_volumes() -> Vec<windows::Win32::Media::Audio::ISimpleAudioVolume> {
+    use windows::core::Interface;
+    use windows::Win32::Media::Audio::{eConsole, eRender, IAudioSessionControl2, IAudioSessionManager2, IMMDeviceEnumerator, ISimpleAudioVolume, MMDeviceEnumerator};
+    use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+    let mut out = Vec::new();
+    unsafe {
+        let Ok(en) = CoCreateInstance::<_, IMMDeviceEnumerator>(&MMDeviceEnumerator, None, CLSCTX_ALL) else { return out };
+        let Ok(dev) = en.GetDefaultAudioEndpoint(eRender, eConsole) else { return out };
+        let Ok(mgr) = dev.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None) else { return out };
+        let Ok(list) = mgr.GetSessionEnumerator() else { return out };
+        for i in 0..list.GetCount().unwrap_or(0) {
+            let Ok(s) = list.GetSession(i) else { continue };
+            let Ok(s2) = s.cast::<IAudioSessionControl2>() else { continue };
+            if !s2.GetProcessId().is_ok_and(is_spotify) { continue; }
+            if let Ok(v) = s.cast::<ISimpleAudioVolume>() { out.push(v); }
+        }
+    }
+    out
 }
 
-pub fn set_master_volume(v: f32) {
-    if let Some(e) = endpoint_volume() {
-        unsafe { let _ = e.SetMasterVolumeLevelScalar(v.clamp(0.0, 1.0), std::ptr::null()); }
+fn is_spotify(pid: u32) -> bool {
+    use windows::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION};
+    unsafe {
+        let Ok(h) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else { return false };
+        let mut buf = [0u16; 512];
+        let mut len = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, windows::core::PWSTR(buf.as_mut_ptr()), &mut len).is_ok();
+        let _ = windows::Win32::Foundation::CloseHandle(h);
+        ok && String::from_utf16_lossy(&buf[..len as usize]).to_lowercase().ends_with("\\spotify.exe")
+    }
+}
+
+thread_local! {
+    static SPOTIFY: std::cell::RefCell<Vec<windows::Win32::Media::Audio::ISimpleAudioVolume>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Como no Orbi em C#: o volume do Spotify no mixer; sem Spotify tocando, o volume geral.
+/// As sessões do Spotify são procuradas só a cada segundo (arrastar a barra só grava o valor nelas).
+pub fn media_volume() -> Option<f32> {
+    let list = spotify_volumes();
+    let v = match list.first() {
+        Some(s) => unsafe { s.GetMasterVolume().ok() },
+        None => unsafe { endpoint_volume()?.GetMasterVolumeLevelScalar().ok() },
+    };
+    SPOTIFY.with(|c| *c.borrow_mut() = list);
+    v
+}
+
+pub fn set_media_volume(v: f32) {
+    let v = v.clamp(0.0, 1.0);
+    let done = SPOTIFY.with(|c| {
+        let list = c.borrow();
+        for s in list.iter() { unsafe { let _ = s.SetMasterVolume(v, std::ptr::null()); } }
+        !list.is_empty()
+    });
+    if !done {
+        if let Some(e) = endpoint_volume() {
+            unsafe { let _ = e.SetMasterVolumeLevelScalar(v, std::ptr::null()); }
+        }
     }
 }
 

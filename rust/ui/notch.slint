@@ -122,6 +122,52 @@ component IconButton inherits Rectangle {
     }
 }
 
+// Volume: só o ícone; com o mouse em cima ele se abre numa barrinha (clicar, arrastar ou rodinha).
+component VolumeHover inherits Rectangle {
+    in-out property <float> value;
+    in-out property <bool> held;
+    callback changed(float);
+    property <bool> expanded: ta.has-hover || root.held;
+    property <length> track: root.width - 42px;
+    width: root.expanded ? 110px : 34px;
+    animate width { duration: 200ms; easing: ease-out; }
+    height: 30px;
+    border-radius: 15px;
+    background: root.expanded ? #FFFFFF18 : transparent;
+    animate background { duration: 200ms; }
+    clip: true;
+    Text {
+        x: 0; width: 34px; height: parent.height;
+        text: root.value < 0.01 ? "\u{E74F}" : root.value < 0.34 ? "\u{E993}" : root.value < 0.67 ? "\u{E994}" : "\u{E995}";
+        font-family: "Segoe MDL2 Assets"; font-size: 14px; color: #DDDDDD;
+        horizontal-alignment: center; vertical-alignment: center;
+    }
+    Rectangle { x: 30px; y: 13px; width: root.track; height: 4px; border-radius: 2px; background: #FFFFFF33; opacity: root.expanded ? 1 : 0; }
+    Rectangle { x: 30px; y: 13px; width: root.track * clamp(root.value, 0, 1); height: 4px; border-radius: 2px; background: white; opacity: root.expanded ? 1 : 0; }
+    Rectangle {
+        x: 30px + root.track * clamp(root.value, 0, 1) - 6px; y: 9px;
+        width: 12px; height: 12px; border-radius: 6px; background: white;
+        opacity: root.expanded ? 1 : 0;
+    }
+    function set(px: length) {
+        root.value = clamp((px - 30px) / root.track, 0, 1);
+        root.changed(root.value);
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.down && self.mouse-x > 24px) { root.held = true; root.set(self.mouse-x); }
+            if (e.kind == PointerEventKind.up) { root.held = false; }
+        }
+        moved => { if (root.held) { root.set(self.mouse-x); } }
+        scroll-event(e) => {
+            root.value = clamp(root.value + (e.delta-y > 0 ? 0.05 : e.delta-y < 0 ? -0.05 : 0), 0, 1);
+            root.changed(root.value);
+            accept
+        }
+    }
+}
+
 // Botão em pílula (estilo Nusa): ícone + texto.
 component Pill inherits Rectangle {
     in property <string> glyph;
@@ -189,7 +235,7 @@ export component Notch inherits Window {
     // Modo jogo (botão no notch): fechado vira só um risquinho preto e só abre com o mouse 2 s em cima.
     in-out property <bool> game-mode;
     callback game-toggled();
-    // Volume do PC (0 a 1), na página da música.
+    // Volume do Spotify (ou o geral, sem Spotify), 0 a 1, na página da música.
     in-out property <float> volume: 0.5;
     // Segurando a barra de volume: o Rust não sobrescreve com o valor do Windows enquanto você arrasta.
     in-out property <bool> volume-held;
@@ -475,38 +521,30 @@ export component Notch inherits Window {
                         HorizontalLayout {
                             alignment: center;
                             spacing: 6px;
-                            if root.has-lyrics : IconButton {
-                                glyph: "\u{E8BD}";
-                                size: 14px;
-                                tint: root.show-lyrics ? white : #FFFFFF88;
-                                clicked => { root.show-lyrics = !root.show-lyrics; }
+                            // Caixas iguais dos dois lados: os botões de tocar ficam no meio mesmo com o volume aberto.
+                            HorizontalLayout {
+                                width: root.show-lyrics && root.has-lyrics ? 60px : 100px;
+                                alignment: end;
+                                if root.has-lyrics : IconButton {
+                                    glyph: "\u{E8BD}";
+                                    size: 14px;
+                                    tint: root.show-lyrics ? white : #FFFFFF88;
+                                    clicked => { root.show-lyrics = !root.show-lyrics; }
+                                }
                             }
                             IconButton { glyph: "\u{E892}"; clicked => { root.previous(); } }
                             IconButton { glyph: root.playing ? "\u{E769}" : "\u{E768}"; size: 19px; tint: white; clicked => { root.play-pause(); } }
                             IconButton { glyph: "\u{E893}"; clicked => { root.next(); } }
-                        }
-                        // Volume do PC: clicar ou arrastar na barra.
-                        HorizontalLayout {
-                            spacing: 10px;
-                            height: 16px;
-                            Text { text: root.volume < 0.01 ? "\u{E74F}" : "\u{E767}"; font-family: "Segoe MDL2 Assets"; font-size: 12px; color: #FFFFFFCC; width: 36px; vertical-alignment: center; }
                             Rectangle {
-                                Rectangle { y: 6px; height: 4px; border-radius: 2px; background: #FFFFFF33; }
-                                Rectangle { x: 0; y: 6px; height: 4px; width: parent.width * clamp(root.volume, 0, 1); border-radius: 2px; background: white; }
-                                Rectangle {
-                                    width: 12px; height: 12px; border-radius: 6px; background: white; y: 2px;
-                                    x: parent.width * clamp(root.volume, 0, 1) - self.width / 2;
-                                }
-                                vol-ta := TouchArea {
-                                    mouse-cursor: pointer;
-                                    pointer-event(e) => {
-                                        if (e.kind == PointerEventKind.down) { root.volume-held = true; root.volume = clamp(self.mouse-x / self.width, 0, 1); root.volume-changed(root.volume); }
-                                        if (e.kind == PointerEventKind.up) { root.volume-held = false; }
-                                    }
-                                    moved => { if (self.pressed) { root.volume = clamp(self.mouse-x / self.width, 0, 1); root.volume-changed(root.volume); } }
+                                // Com a letra ao lado a coluna é estreita: o volume aberto avança um pouco para a direita.
+                                width: root.show-lyrics && root.has-lyrics ? 60px : 100px;
+                                VolumeHover {
+                                    x: 0;
+                                    value <=> root.volume;
+                                    held <=> root.volume-held;
+                                    changed(v) => { root.volume-changed(v); }
                                 }
                             }
-                            Text { text: round(root.volume * 100) + "%"; color: #FFFFFFCC; font-size: 11px; width: 40px; horizontal-alignment: right; vertical-alignment: center; }
                         }
                     }
                     // Letra: a linha cantada acesa, as outras apagadas.

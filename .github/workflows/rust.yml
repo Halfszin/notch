@@ -66,6 +66,12 @@ jobs:
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($w / 2)), 10
           Start-Sleep 2
           Shot "2-aberto"
+          # Volume: o mouse em cima do alto-falante (à direita dos botões de tocar) abre a barrinha.
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int](($w - 620) / 2 + 46 + 156 + 280)), 175
+          Start-Sleep 1
+          Shot "2b-volume"
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($w / 2)), 10
+          Start-Sleep 1
           # Rodinha do mouse para baixo = próxima página.
           foreach ($name in "3-tarefas", "4-foco") {
             [W.M]::mouse_event(0x0800, 0, 0, -120, [System.UIntPtr]::Zero)

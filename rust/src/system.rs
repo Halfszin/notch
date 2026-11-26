@@ -99,7 +99,7 @@ pub fn setup(notch: &Notch) {
         }
     });
 
-    notch.on_volume_changed(|v| crate::winapi::set_master_volume(v));
+    notch.on_volume_changed(|v| crate::winapi::set_media_volume(v));
 
     let weak = notch.as_weak();
     let hit = std::rc::Rc::new(std::cell::Cell::new(true));
@@ -231,7 +231,7 @@ pub fn setup(notch: &Notch) {
         let (clock, date) = now_text();
         n.set_clock(clock.into());
         if !n.get_volume_held() {
-            if let Some(v) = crate::winapi::master_volume() { n.set_volume(v); }
+            if let Some(v) = crate::winapi::media_volume() { n.set_volume(v); }
         }
         // Nas laterais a hora fica em pé ("19" em cima de "54").
         n.set_side_text(n.get_closed_text().replace(':', "\n").into());
