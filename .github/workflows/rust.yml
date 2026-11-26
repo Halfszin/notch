@@ -165,7 +165,7 @@ jobs:
           $base = "http://127.0.0.1:$($cfg.agent_port)/$($cfg.agent_token)"
           '{"session_id":"s1","cwd":"C:\\proj\\meu-app","tool_name":"Edit","tool_input":{"file_path":"C:\\proj\\meu-app\\main.rs"}}' | Set-Content "$env:TEMP\pre.json" -Encoding ascii
           '{"session_id":"s1","cwd":"C:\\proj\\meu-app","tool_name":"Bash","tool_input":{"command":"cargo build --release"},"permission_suggestions":[]}' | Set-Content "$env:TEMP\perm.json" -Encoding ascii
-          "agente_codigo_errado=$(curl.exe -s -o NUL -w '%{http_code}' --data-binary '@$env:TEMP\pre.json' "http://127.0.0.1:$($cfg.agent_port)/errado/PreToolUse")" | Out-File ci\resultado.txt -Append
+          "agente_codigo_errado=$(curl.exe -s -o NUL -w '%{http_code}' --data-binary "@$env:TEMP\pre.json" "http://127.0.0.1:$($cfg.agent_port)/errado/PreToolUse")" | Out-File ci\resultado.txt -Append
           curl.exe -s --data-binary "@$env:TEMP\pre.json" "$base/PreToolUse" | Out-Null
           $permJob = Start-Job { param($u, $f) curl.exe -s -m 60 --data-binary "@$f" "$u/PermissionRequest" } -ArgumentList $base, "$env:TEMP\perm.json"
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 900, 700
@@ -229,6 +229,8 @@ jobs:
           if (Test-Path "$env:APPDATA\Orbi\rust-erro.log") { Copy-Item "$env:APPDATA\Orbi\rust-erro.log" ci\erro.log }
           if (Test-Path "$env:APPDATA\Orbi\rust-diag.txt") { Copy-Item "$env:APPDATA\Orbi\rust-diag.txt" ci\diag.txt }
           if (-not $p.HasExited) { Stop-Process $p -Force }
+          # O resultado é conferido no passo "Falhar se fechou"; o código de saída do último curl não conta.
+          exit 0
 
       - name: Guardar prints no branch ci-results-rust
         shell: bash
