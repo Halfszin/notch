@@ -239,12 +239,49 @@ pub fn loopback(mut on: impl FnMut(&[f32], f32)) -> windows::core::Result<()> {
 }
 
 /// Som de aviso: um .wav com esse nome em %AppData%\Orbi\sons substitui o som do Windows (como no C#).
+/// O som padrão é o arquivo do próprio Windows (o evento "Asterisco" fica mudo em muitos esquemas de som).
 pub fn play_sound(name: &str) {
-    use windows::Win32::Media::Audio::{PlaySoundW, SND_ALIAS, SND_ASYNC, SND_FILENAME, SND_NODEFAULT};
-    let file = crate::store::dir().join("sons").join(format!("{name}.wav"));
+    use windows::Win32::Media::Audio::{PlaySoundW, SND_ASYNC, SND_FILENAME, SND_NODEFAULT};
+    let own = crate::store::dir().join("sons").join(format!("{name}.wav"));
+    let media = std::path::PathBuf::from(std::env::var("WINDIR").unwrap_or_else(|_| "C:\\Windows".into())).join("Media");
+    let windows = media.join(match name {
+        "lembrete" => "Windows Notify Calendar.wav",
+        "timer" => "Alarm01.wav",
+        _ => "Windows Notify Messaging.wav",
+    });
+    for file in [own, windows, media.join("Windows Notify System Generic.wav")] {
+        if file.exists() && unsafe { PlaySoundW(&HSTRING::from(file.as_os_str()), None, SND_FILENAME | SND_ASYNC | SND_NODEFAULT) }.as_bool() { return; }
+    }
+}
+
+/// Ícone de verdade de um app (o mesmo do menu Iniciar), pelo id dele no Windows, em RGBA.
+/// Precisa de COM na thread (quem chama inicia).
+pub fn app_icon(aumid: &str, size: i32) -> Option<(u32, u32, Vec<u8>)> {
+    use windows::Win32::Foundation::SIZE;
+    use windows::Win32::Graphics::Gdi::{DeleteObject, GetDC, GetDIBits, ReleaseDC, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS};
+    use windows::Win32::UI::Shell::{IShellItemImageFactory, SHCreateItemFromParsingName, SIIGBF_ICONONLY};
     unsafe {
-        if file.exists() && PlaySoundW(&HSTRING::from(file.as_os_str()), None, SND_FILENAME | SND_ASYNC | SND_NODEFAULT).as_bool() { return; }
-        let _ = PlaySoundW(windows::core::w!("SystemAsterisk"), None, SND_ALIAS | SND_ASYNC | SND_NODEFAULT);
+        let item: IShellItemImageFactory = SHCreateItemFromParsingName(&HSTRING::from(format!("shell:AppsFolder\\{aumid}")), None).ok()?;
+        let bmp = item.GetImage(SIZE { cx: size, cy: size }, SIIGBF_ICONONLY).ok()?;
+        let mut info = BITMAPINFO::default();
+        info.bmiHeader = BITMAPINFOHEADER {
+            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: size, biHeight: -size, biPlanes: 1, biBitCount: 32, biCompression: BI_RGB.0, ..Default::default()
+        };
+        let mut px = vec![0u8; (size * size * 4) as usize];
+        let dc = GetDC(None);
+        let lines = GetDIBits(dc, bmp, 0, size as u32, Some(px.as_mut_ptr().cast()), &mut info, DIB_RGB_COLORS);
+        ReleaseDC(None, dc);
+        let _ = DeleteObject(bmp.into());
+        if lines == 0 { return None; }
+        // O Windows entrega BGRA com alfa pré-multiplicado; o Slint quer RGBA normal.
+        for p in px.chunks_exact_mut(4) {
+            let a = p[3] as u32;
+            let (b, g, r) = (p[0] as u32, p[1] as u32, p[2] as u32);
+            let un = |c: u32| if a == 0 { 0 } else { (c * 255 / a).min(255) as u8 };
+            p[0] = un(r); p[1] = un(g); p[2] = un(b);
+        }
+        Some((size as u32, size as u32, px))
     }
 }
 

@@ -19,6 +19,7 @@ thread_local! {
 /// Aviso rápido no notch fechado por alguns segundos.
 pub fn toast(n: &Notch, glyph: &str, text: &str, color: Color, secs: u64) {
     n.set_toast_badge(false);
+    n.set_has_toast_icon(false);
     n.set_toast_glyph(glyph.into());
     n.set_toast_text(text.into());
     n.set_toast_color(color);
@@ -29,11 +30,15 @@ pub fn toast(n: &Notch, glyph: &str, text: &str, color: Color, secs: u64) {
     }));
 }
 
-/// Aviso de app (WhatsApp, Discord): ícone branco num quadradinho da cor do app, e som.
-pub fn toast_app(n: &Notch, app: &str, text: &str) {
+/// Aviso de app (WhatsApp, Discord): o ícone de verdade do app (sem ele, um quadradinho da cor do app) e som.
+pub fn toast_app(n: &Notch, app: &str, icon: Option<slint::Image>, text: &str) {
     let color = if app == "WhatsApp" { Color::from_rgb_u8(0x25, 0xD3, 0x66) } else { Color::from_rgb_u8(0x58, 0x65, 0xF2) };
     toast(n, if app == "WhatsApp" { "\u{E8BD}" } else { "\u{E8F2}" }, text, color, 5);
     n.set_toast_badge(true);
+    if let Some(icon) = icon {
+        n.set_toast_icon(icon);
+        n.set_has_toast_icon(true);
+    }
     sound("aviso");
 }
 
@@ -57,14 +62,19 @@ pub fn setup(notch: &Notch) {
 fn app_notifications(notch: &Notch) {
     let weak = notch.as_weak();
     std::thread::spawn(move || {
+        // COM em modo de janela: o ícone do app vem do Shell.
+        unsafe { let _ = windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_APARTMENTTHREADED); }
         let mut watcher = crate::notifications::Watcher::new();
+        let mut icons: std::collections::HashMap<String, Option<(u32, u32, Vec<u8>)>> = Default::default();
         loop {
-            for (app, title, body) in watcher.poll() {
+            for (app, handler, title, body) in watcher.poll() {
+                let icon = icons.entry(handler.clone()).or_insert_with(|| crate::winapi::app_icon(&handler, 48)).clone();
                 let weak = weak.clone();
                 let _ = slint::invoke_from_event_loop(move || {
                     if !crate::settings::get().app_notifications { return; }
                     let Some(n) = weak.upgrade() else { return };
-                    toast_app(&n, app, &if body.is_empty() { title } else { format!("{title}: {body}") });
+                    let icon = icon.map(|(w, h, px)| slint::Image::from_rgba8(slint::SharedPixelBuffer::clone_from_slice(&px, w, h)));
+                    toast_app(&n, app, icon, &if body.is_empty() { title } else { format!("{title}: {body}") });
                 });
             }
             std::thread::sleep(Duration::from_secs(2));

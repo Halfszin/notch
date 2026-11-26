@@ -44,10 +44,15 @@ fn run() -> Result<(), slint::PlatformError> {
     if std::env::args().any(|a| a == "--testar-letra") {
         let count = |l: Option<Vec<lyrics::Line>>| l.map_or(0, |l| l.len());
         let text = format!(
-            "com_album={}\nsem_album={}\nlrclib: {}\n",
+            "com_album={}\nsem_album={}\nlrclib: {}\nicone_do_explorer={}\nsom_do_windows={}\n",
             count(lyrics::fetch("Coldplay", "Yellow", "Parachutes", 269.0)),
             count(lyrics::fetch("Coldplay", "Yellow", "", 0.0)),
             lyrics::probe(),
+            {
+                unsafe { let _ = windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_APARTMENTTHREADED); }
+                winapi::app_icon("Microsoft.Windows.Explorer", 48).map(|(w, h, px)| format!("{w}x{h} visiveis={}", px.chunks(4).filter(|p| p[3] > 0).count())).unwrap_or("nenhum".into())
+            },
+            std::path::Path::new(&(std::env::var("WINDIR").unwrap_or_default() + "\\Media\\Windows Notify Messaging.wav")).exists(),
         );
         let _ = std::fs::create_dir_all(store::dir());
         let _ = std::fs::write(store::dir().join("rust-letra.txt"), text);

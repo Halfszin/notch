@@ -70,8 +70,8 @@ mod db {
             Watcher { sql: load(), path, last_id: -1 }
         }
 
-        /// (app, título, texto) de cada notificação nova dos apps acompanhados.
-        pub fn poll(&mut self) -> Vec<(&'static str, String, String)> {
+        /// (app, id do app no Windows, título, texto) de cada notificação nova dos apps acompanhados.
+        pub fn poll(&mut self) -> Vec<(&'static str, String, String, String)> {
             let mut out = Vec::new();
             let Some(sql) = &self.sql else { return out };
             let Ok(path) = std::ffi::CString::new(self.path.clone()) else { return out };
@@ -102,12 +102,13 @@ mod db {
                             last = (sql.col64)(st, 0);
                             let handler = (sql.text)(st, 1);
                             if handler.is_null() { return; }
-                            let Some(app) = super::app_of(&CStr::from_ptr(handler as *const c_char).to_string_lossy()) else { return };
+                            let handler = CStr::from_ptr(handler as *const c_char).to_string_lossy().into_owned();
+                            let Some(app) = super::app_of(&handler) else { return };
                             let (p, n) = ((sql.blob)(st, 2), (sql.bytes)(st, 2));
                             if p.is_null() || n <= 0 { return; }
                             let xml = String::from_utf8_lossy(std::slice::from_raw_parts(p as *const u8, n as usize));
                             let (title, body) = super::parse_toast(&xml);
-                            if !title.is_empty() || !body.is_empty() { out.push((app, title, body)); }
+                            if !title.is_empty() || !body.is_empty() { out.push((app, handler, title, body)); }
                         },
                     );
                     self.last_id = last;

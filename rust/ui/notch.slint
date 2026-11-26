@@ -318,6 +318,9 @@ export component Notch inherits Window {
     in property <color> toast-color: white;
     // Aviso de app: o ícone vai branco num quadradinho da cor do app.
     in property <bool> toast-badge;
+    // Ícone de verdade do app (do menu Iniciar), quando o Windows entrega.
+    in property <image> toast-icon;
+    in property <bool> has-toast-icon;
     out property <length> toast-width: 360px;
     out property <length> toast-height: 36px;
 
@@ -445,7 +448,11 @@ export component Notch inherits Window {
             padding-left: 16px;
             padding-right: 16px;
             if !root.toast-badge : Text { text: root.toast-glyph; font-family: "Segoe MDL2 Assets"; font-size: 14px; color: root.toast-color; vertical-alignment: center; }
-            if root.toast-badge : VerticalLayout {
+            if root.has-toast-icon : VerticalLayout {
+                alignment: center;
+                Image { source: root.toast-icon; width: 22px; height: 22px; image-fit: contain; }
+            }
+            if root.toast-badge && !root.has-toast-icon : VerticalLayout {
                 alignment: center;
                 Rectangle {
                     width: 22px; height: 22px; border-radius: 7px; background: root.toast-color;
