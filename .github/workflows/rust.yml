@@ -38,8 +38,6 @@ jobs:
 
       - name: Abrir o Orbi (Rust) e tirar prints
         shell: pwsh
-        env:
-          ORBI_SEM_AGENTES: "1"  # diagnóstico: a máquina do teste caía 30 s depois de abrir; isola o servidor dos agentes
         run: |
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
           New-Item -ItemType Directory ci -Force | Out-Null
@@ -62,6 +60,16 @@ jobs:
           '[{"Title":"Revisar o relatorio","Done":true},{"Title":"Responder a Dina","Done":true},{"Title":"Postar a atualizacao","Done":true},{"Title":"Ligar pro banco","Done":true},{"Title":"Comprar pao","Due":"2026-11-25T18:00:00","Done":false}]' | Set-Content "$env:APPDATA\Orbi\tarefas.json" -Encoding utf8
           '[{"Name":"Bloco de notas","Target":"C:\\Windows\\System32\\notepad.exe"},{"Name":"github.com","Target":"https://github.com/"},{"Name":"Windows","Target":"C:\\Windows"}]' | Set-Content "$env:APPDATA\Orbi\atalhos.json" -Encoding utf8
           Add-Type -Namespace W -Name M -MemberDefinition '[DllImport("user32.dll")] public static extern void mouse_event(uint f, int x, int y, int d, System.UIntPtr e);'
+          Add-Type -TypeDefinition @"
+          using System; using System.Runtime.InteropServices;
+          namespace W { public static class Win {
+            delegate bool Cb(IntPtr h, IntPtr l);
+            [DllImport("user32.dll")] static extern bool EnumWindows(Cb cb, IntPtr l);
+            [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+            [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+            public static void CloseAll(int pid) { EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); if (p == pid) PostMessage(h, 0x10, IntPtr.Zero, IntPtr.Zero); return true; }, IntPtr.Zero); }
+          } }
+          "@
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 900, 700
           # Letra de verdade no LRCLIB (com e sem álbum): o notch mostra a letra da música tocando.
           Start-Process $exe -ArgumentList "--testar-letra" -Wait
@@ -126,8 +134,10 @@ jobs:
           Click (($w + 620) / 2 - 91) 22
           Start-Sleep 1
           Shot "13-configuracoes"
-          # Fechar e abrir de novo pela engrenagem (antes não reabria).
-          [System.Windows.Forms.SendKeys]::SendWait("%{F4}")
+          # Fechar e abrir de novo pela engrenagem (antes não reabria). Fecha mandando "fechar" para as janelas
+          # do Orbi (o notch ignora; as configurações fecham). Alt+F4 fechava a janela em foco, que às vezes era a
+          # do próprio GitHub, e a máquina do teste caía.
+          [W.Win]::CloseAll($p.Id)
           Start-Sleep 1
           Shot "13a-fechada"
           Click (($w + 620) / 2 - 91) 22
