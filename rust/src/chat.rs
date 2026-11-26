@@ -32,8 +32,41 @@ pub fn parse_answer(stdout: &str) -> Result<String, String> {
     if error || result.is_empty() { Err(if result.is_empty() { "O Claude Code não respondeu.".into() } else { result }) } else { Ok(result) }
 }
 
+/// Corpo do pedido para a API do Claude (Messages): conversa inteira, respostas curtas.
+pub fn api_body(history: &[(bool, String)], question: &str) -> serde_json::Value {
+    let mut messages: Vec<serde_json::Value> = history.iter()
+        .map(|(user, text)| serde_json::json!({ "role": if *user { "user" } else { "assistant" }, "content": text }))
+        .collect();
+    messages.push(serde_json::json!({ "role": "user", "content": question }));
+    serde_json::json!({
+        "model": "claude-opus-5-5",
+        "max_tokens": 16000,
+        "system": SYSTEM,
+        // Conversa do notch: respostas rápidas e curtas.
+        "output_config": { "effort": "low" },
+        // Se o filtro de segurança recusar, a API tenta de novo num modelo de reserva na mesma chamada.
+        "fallbacks": "default",
+        "messages": messages,
+    })
+}
+
+/// Texto da resposta da API (ou o motivo de não ter resposta).
+pub fn api_answer(json: &serde_json::Value) -> Result<String, String> {
+    if json.get("stop_reason").and_then(|s| s.as_str()) == Some("refusal") {
+        return Err("O Claude não quis responder a esse pedido.".into());
+    }
+    let text: String = json.get("content").and_then(|c| c.as_array()).into_iter().flatten()
+        .filter(|b| b.get("type").and_then(|t| t.as_str()) == Some("text"))
+        .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
+        .collect::<Vec<_>>().join("\n").trim().to_string();
+    if text.is_empty() { Err("A API não mandou texto.".into()) } else { Ok(text) }
+}
+
+pub const SYSTEM: &str = "Você é o assistente do Orbi, um notch no topo da tela do Windows. Responda em português do Brasil, \
+    curto e direto (a resposta aparece numa área pequena), sem markdown pesado.";
+
 #[cfg(windows)]
-pub use win::{ask, find};
+pub use win::{ask, ask_api, find};
 
 #[cfg(windows)]
 mod win {
@@ -42,8 +75,27 @@ mod win {
     use std::path::PathBuf;
     use std::process::{Command, Stdio};
 
-    const SYSTEM: &str = "Você é o assistente do Orbi, um notch no topo da tela do Windows. Responda em português do Brasil, \
-        curto e direto (a resposta aparece numa área pequena), sem markdown pesado.";
+    use super::SYSTEM;
+
+    /// Pergunta pela API do Claude com a sua chave (quando não há Claude Code ou ele não respondeu).
+    pub fn ask_api(key: &str, history: &[(bool, String)], question: &str) -> Result<String, String> {
+        let res = crate::lyrics::http().post("https://api.anthropic.com/v1/messages")
+            .header("x-api-key", key)
+            .header("anthropic-version", "2026-10-21")
+            .header("anthropic-beta", "server-side-fallback-2026-07-01")
+            .header("content-type", "application/json")
+            .send(super::api_body(history, question).to_string());
+        let mut res = match res {
+            Ok(r) => r,
+            Err(ureq::Error::StatusCode(401)) => return Err("A chave de API foi recusada. Confira nas configurações.".into()),
+            Err(ureq::Error::StatusCode(429)) => return Err("Limite da API atingido agora. Tente de novo daqui a pouco.".into()),
+            Err(ureq::Error::StatusCode(c)) if c >= 500 => return Err("A API do Claude está com problema agora. Tente de novo.".into()),
+            Err(e) => return Err(format!("Não deu para falar com a API: {e}")),
+        };
+        let body = res.body_mut().read_to_string().map_err(|e| e.to_string())?;
+        let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+        super::api_answer(&json)
+    }
 
     /// Claude Code instalado: instalador oficial (.local\bin) e npm primeiro (o PATH deste processo é o de quando o
     /// Orbi abriu, então um Claude Code instalado depois não estaria nele), depois o PATH.
@@ -102,6 +154,17 @@ mod tests {
         assert_eq!(greeting(23, 0), "Pensamentos noturnos?");
         assert_eq!(greeting(2, 0), "Pensamentos da madrugada?");
         assert_eq!(greeting(9, 5), "Café na mão? Manda a primeira.");
+    }
+
+    #[test]
+    fn pedido_e_resposta_da_api() {
+        let body = api_body(&[(true, "oi".into()), (false, "olá".into())], "tudo bem?");
+        assert_eq!(body["model"], "claude-opus-5-5");
+        assert_eq!(body["messages"].as_array().unwrap().len(), 3);
+        assert_eq!(body["messages"][1]["role"], "assistant");
+        let ok = serde_json::json!({ "stop_reason": "end_turn", "content": [{ "type": "thinking", "thinking": "" }, { "type": "text", "text": "Tudo!" }] });
+        assert_eq!(api_answer(&ok), Ok("Tudo!".into()));
+        assert!(api_answer(&serde_json::json!({ "stop_reason": "refusal", "content": [] })).is_err());
     }
 
     #[test]

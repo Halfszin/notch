@@ -82,14 +82,22 @@ pub fn chat(notch: &Notch) {
         let question = text.trim().to_string();
         if question.is_empty() || n.get_chat_busy() { return; }
         let prompt = crate::chat::prompt(&h.borrow(), &question);
+        let past = h.borrow().clone();
+        let key = crate::settings::api_key();
+        let q = question.clone();
         h.borrow_mut().push((true, question));
         n.set_chat_busy(true);
         r();
         let weak = weak.clone();
         std::thread::spawn(move || {
-            let answer = match crate::chat::find() {
+            // Assinatura primeiro (Claude Code); sem ele, ou se ele falhar, a chave de API (se houver).
+            let cli = match crate::chat::find() {
                 Some(exe) => crate::chat::ask(&exe, &prompt),
-                None => Err("Não achei o Claude Code neste PC. Instale e faça /login uma vez no terminal (comando \"claude\").".into()),
+                None => Err("Não achei o Claude Code neste PC. Instale e faça /login uma vez no terminal (comando \"claude\"), ou coloque uma chave de API nas configurações.".into()),
+            };
+            let answer = match (cli, key) {
+                (Err(_), Some(key)) => crate::chat::ask_api(&key, &past, &q),
+                (result, _) => result,
             };
             let _ = slint::invoke_from_event_loop(move || {
                 let Some(n) = weak.upgrade() else { return };

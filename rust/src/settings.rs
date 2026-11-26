@@ -37,6 +37,8 @@ pub struct Prefs {
     pub city: String,
     pub lat: Option<f64>,
     pub lon: Option<f64>,
+    /// Chave da API do Claude, cifrada com a conta do Windows (DPAPI), como no Orbi em C#.
+    pub api_key_protected: Option<String>,
     /// Páginas na ordem das bolinhas (id = posição na lista PAGES) e se aparecem.
     pub pages: Vec<PageCfg>,
 }
@@ -57,7 +59,7 @@ impl Prefs {
 impl Default for Prefs {
     fn default() -> Self {
         Prefs {
-            battery_alerts: true, audio_alerts: true, reminders: true, lyrics: true, gradient: true, auto_update: true, compact: false, edge: 0, edge_pos: 0.5, game_mode: false, app_notifications: true, sounds: true, agent_port: 47831, agent_token: String::new(), city: String::new(), lat: None, lon: None,
+            battery_alerts: true, audio_alerts: true, reminders: true, lyrics: true, gradient: true, auto_update: true, compact: false, edge: 0, edge_pos: 0.5, game_mode: false, app_notifications: true, sounds: true, agent_port: 47831, agent_token: String::new(), city: String::new(), lat: None, lon: None, api_key_protected: None,
             pages: (0..PAGES.len()).map(|id| PageCfg { id, visible: true }).collect(),
         }
     }
@@ -219,6 +221,7 @@ pub fn show() {
                     city: get().city,
                     lat: get().lat,
                     lon: get().lon,
+                    api_key_protected: get().api_key_protected,
                     pages: get().pages,
                 };
                 crate::store::save(FILE, &prefs);
@@ -248,6 +251,17 @@ pub fn show() {
             }));
             let weak = w.as_weak();
             w.on_save_city(move |text| save_city(&weak, text.to_string()));
+            let weak = w.as_weak();
+            w.on_save_api_key(move |text| {
+                let Some(w) = weak.upgrade() else { return };
+                let key = text.trim().to_string();
+                let mut p = get();
+                p.api_key_protected = if key.is_empty() { None } else { crate::winapi::protect(&key) };
+                crate::store::save(FILE, &p);
+                PREFS.with(|x| *x.borrow_mut() = p);
+                w.set_api_key_input("".into());
+                w.set_api_key_status(api_key_status().into());
+            });
             w.on_agents_connect(|| agents_switch(true));
             w.on_agents_disconnect(|| agents_switch(false));
             w.on_check_update(updater::check_now);
@@ -273,6 +287,7 @@ pub fn show() {
         w.set_app_notifications(p.app_notifications);
         w.set_sounds(p.sounds);
         w.set_city(p.city.clone().into());
+        w.set_api_key_status(api_key_status().into());
         w.set_city_status(if p.city.is_empty() { "Escreva sua cidade para ver o clima no topo do notch.".into() } else { format!("Mostrando o clima de {}.", p.city).into() });
         // Direto na janela: aqui ela já está emprestada (chamar refresh_agents travava o Orbi).
         let (connected, status) = agents_state();
@@ -296,6 +311,22 @@ pub fn show() {
             }
         });
     });
+}
+
+// ---------- chave da API do Claude ----------
+
+/// A chave guardada (aberta com a conta do Windows), se houver.
+pub fn api_key() -> Option<String> {
+    get().api_key_protected.and_then(|h| crate::winapi::unprotect(&h)).filter(|k| !k.is_empty())
+}
+
+fn api_key_status() -> String {
+    match api_key() {
+        Some(k) => format!("Chave salva (termina em …{}). O chat usa a assinatura pelo Claude Code e, se ele não responder, esta chave.",
+            k.chars().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect::<String>()),
+        None if get().api_key_protected.is_some() => "A chave salva foi cifrada em outro usuário ou PC. Cole de novo.".into(),
+        None => "Opcional. Sem chave, o chat usa a sua assinatura pelo Claude Code (sem custo extra).".into(),
+    }
 }
 
 // ---------- clima ----------

@@ -1250,6 +1250,9 @@ export component Settings inherits Window {
     in-out property <bool> app-notifications: true;
     in-out property <bool> sounds: true;
     in-out property <string> city;
+    in-out property <string> api-key-input;
+    in property <string> api-key-status;
+    callback save-api-key(string);
     in property <string> city-status;
     callback save-city(string);
     in property <bool> agents-connected;
@@ -1276,6 +1279,7 @@ export component Settings inherits Window {
         { glyph: "\u{E790}", text: "Aparência" },
         { glyph: "\u{EA8F}", text: "Notificações" },
         { glyph: "\u{E706}", text: "Clima" },
+        { glyph: "\u{E8D4}", text: "IA" },
         { glyph: "\u{E99A}", text: "Agentes" },
         { glyph: "\u{E895}", text: "Atualizações" },
         { glyph: "\u{E7E8}", text: "App" },
@@ -1283,7 +1287,7 @@ export component Settings inherits Window {
     // Clicar no menu rola até a seção (como no Orbi em C#).
     function go(i: int) {
         root.section = i;
-        let y = i == 0 ? s0.y : i == 1 ? sp.y : i == 2 ? s1.y : i == 3 ? s2.y : i == 4 ? sw.y : i == 5 ? sa.y : i == 6 ? s3.y : s4.y;
+        let y = i == 0 ? s0.y : i == 1 ? sp.y : i == 2 ? s1.y : i == 3 ? s2.y : i == 4 ? sw.y : i == 5 ? si.y : i == 6 ? sa.y : i == 7 ? s3.y : s4.y;
         flick.content-y = max(-(y - 8px), flick.height - flick.content-height);
     }
 
@@ -1526,6 +1530,24 @@ export component Settings inherits Window {
                                         spacing: 8px;
                                         city-edit := LineEdit { width: 180px; text <=> root.city; placeholder-text: "ex.: Campinas"; accepted(t) => { root.save-city(t); } }
                                         PillButton { text: "Salvar"; clicked => { root.save-city(city-edit.text); } }
+                                    }
+                                }
+                            }
+                        }
+
+                        si := SectionLabel { text: "INTELIGÊNCIA ARTIFICIAL"; height: 46px; vertical-alignment: bottom; }
+                        Rectangle { height: 10px; }
+                        Card {
+                            Row {
+                                title: "Chave da API do Claude";
+                                sub: root.api-key-status;
+                                VerticalLayout {
+                                    alignment: center;
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        key-edit := LineEdit { width: 180px; input-type: password; text <=> root.api-key-input; placeholder-text: "sk-ant-..."; accepted(t) => { root.save-api-key(t); } }
+                                        PillButton { text: "Salvar"; clicked => { root.save-api-key(key-edit.text); } }
+                                        PillButton { text: "Remover"; clicked => { root.save-api-key(""); } }
                                     }
                                 }
                             }

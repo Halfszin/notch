@@ -335,6 +335,34 @@ impl Thermal {
     }
 }
 
+/// Cifra com a conta do Windows (DPAPI): copiado para outro PC ou usuário, o dado não abre. Volta em hexadecimal.
+pub fn protect(text: &str) -> Option<String> {
+    use windows::Win32::Security::Cryptography::{CryptProtectData, CRYPT_INTEGER_BLOB};
+    unsafe {
+        let input = CRYPT_INTEGER_BLOB { cbData: text.len() as u32, pbData: text.as_ptr() as *mut u8 };
+        let mut out = CRYPT_INTEGER_BLOB::default();
+        CryptProtectData(&input, PCWSTR::null(), None, None, None, 0, &mut out).ok()?;
+        let bytes = std::slice::from_raw_parts(out.pbData, out.cbData as usize);
+        let hex = bytes.iter().map(|b| format!("{b:02x}")).collect();
+        let _ = windows::Win32::Foundation::LocalFree(Some(windows::Win32::Foundation::HLOCAL(out.pbData.cast())));
+        Some(hex)
+    }
+}
+
+/// Abre o que `protect` cifrou (None se foi cifrado por outro usuário/PC).
+pub fn unprotect(hex: &str) -> Option<String> {
+    use windows::Win32::Security::Cryptography::{CryptUnprotectData, CRYPT_INTEGER_BLOB};
+    let bytes: Vec<u8> = (0..hex.len()).step_by(2).map(|i| u8::from_str_radix(hex.get(i..i + 2)?, 16).ok()).collect::<Option<_>>()?;
+    unsafe {
+        let input = CRYPT_INTEGER_BLOB { cbData: bytes.len() as u32, pbData: bytes.as_ptr() as *mut u8 };
+        let mut out = CRYPT_INTEGER_BLOB::default();
+        CryptUnprotectData(&input, None, None, None, None, 0, &mut out).ok()?;
+        let text = String::from_utf8(std::slice::from_raw_parts(out.pbData, out.cbData as usize).to_vec()).ok();
+        let _ = windows::Win32::Foundation::LocalFree(Some(windows::Win32::Foundation::HLOCAL(out.pbData.cast())));
+        text
+    }
+}
+
 /// Abre um app, arquivo, pasta ou site como o Explorer abriria.
 pub fn open(target: &str) {
     unsafe { ShellExecuteW(Some(HWND::default()), &HSTRING::from("open"), &HSTRING::from(target), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL) };
