@@ -428,6 +428,14 @@ fn agents_state() -> (bool, String) {
     (connected, status)
 }
 
+/// Ao abrir: conectado com hooks antigos do Orbi (ou com outra porta), troca pelos atuais sem pedir.
+pub fn upgrade_agents() {
+    let port = crate::agents::port();
+    let Ok(Some(current)) = read_claude() else { return };
+    if port == 0 || !crate::agents::needs_upgrade(&current, port, &get().agent_token) { return; }
+    if let Ok((merged, _)) = crate::agents::merge(Some(current), port, &get().agent_token) { let _ = write_claude(&merged, true); }
+}
+
 /// Atualiza o estado dos agentes no notch e na janela de configurações (se aberta).
 /// Não chamar com a janela emprestada (dentro de show): lá o estado vai direto na janela.
 pub fn refresh_agents(n: &Notch) {

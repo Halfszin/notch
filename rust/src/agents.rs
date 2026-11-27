@@ -78,6 +78,18 @@ pub fn unmerge(mut root: Value) -> Value {
     root
 }
 
+/// Conectado com hooks de versão antiga do Orbi (comando com curl, que quebra no PowerShell)?
+pub fn needs_upgrade(root: &Value, port: u16, token: &str) -> bool {
+    let current = url(port, token, "Stop");
+    let ours: Vec<&Value> = root.get("hooks").and_then(|h| h.as_object()).into_iter()
+        .flat_map(|h| h.values()).filter_map(|l| l.as_array()).flatten()
+        .filter(|e| is_ours_entry(e))
+        .flat_map(|e| e.get("hooks").and_then(|h| h.as_array()).into_iter().flatten())
+        .collect();
+    !ours.is_empty() && (ours.iter().any(|h| h.get("type").and_then(|t| t.as_str()) != Some("http"))
+        || !ours.iter().any(|h| h.get("url").and_then(|u| u.as_str()) == Some(current.as_str())))
+}
+
 pub fn is_installed(root: &Value) -> bool {
     root.get("hooks").and_then(|h| h.as_object()).is_some_and(|h| h.values().any(|l| l.as_array().is_some_and(|a| a.iter().any(is_ours_entry))))
 }
@@ -443,6 +455,9 @@ mod tests {
         assert_eq!(upgraded["hooks"]["SessionStart"].as_array().unwrap().len(), 1);
         assert_eq!(upgraded["hooks"]["Stop"].as_array().unwrap().len(), 1);
         assert_eq!(upgraded["hooks"]["Stop"][0]["hooks"][0]["type"], "http");
+        assert!(!needs_upgrade(&upgraded, 1, "t"));
+        assert!(needs_upgrade(&upgraded, 2, "t")); // porta mudou
+        assert!(!needs_upgrade(&json!({}), 1, "t")); // não conectado: nada a trocar
     }
 
     #[test]
