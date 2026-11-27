@@ -67,7 +67,8 @@ jobs:
             [DllImport("user32.dll")] static extern bool EnumWindows(Cb cb, IntPtr l);
             [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
             [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
-            public static void CloseAll(int pid) { EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); if (p == pid) PostMessage(h, 0x10, IntPtr.Zero, IntPtr.Zero); return true; }, IntPtr.Zero); }
+            [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+            public static void CloseAll(int pid) { EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); if (p == pid && IsWindowVisible(h)) PostMessage(h, 0x10, IntPtr.Zero, IntPtr.Zero); return true; }, IntPtr.Zero); }
           } }
           "@
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 900, 700
@@ -135,7 +136,8 @@ jobs:
           Start-Sleep 1
           Shot "13-configuracoes"
           # Fechar e abrir de novo pela engrenagem (antes não reabria). Fecha mandando "fechar" para as janelas
-          # do Orbi (o notch ignora; as configurações fecham). Alt+F4 fechava a janela em foco, que às vezes era a
+          # visíveis do Orbi (o notch ignora; as configurações fecham). Só as visíveis: a janela escondida do Tauri leva
+          # os avisos do Rust para a tela, e fechá-la congelava o notch. Alt+F4 fechava a janela em foco, que às vezes era a
           # do próprio GitHub, e a máquina do teste caía.
           [W.Win]::CloseAll($p.Id)
           Start-Sleep 1
