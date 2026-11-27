@@ -129,7 +129,11 @@ pub fn put(key: &str, v: Value) {
         s.get_or_insert_with(Map::new).insert(key.to_string(), v.clone()) != Some(v.clone())
     };
     // Só para a janela dona do valor ("notch.x" → notch, "settings.x" → configurações).
-    if changed { if let Some(app) = APP.get() { let _ = app.emit_to(key.split('.').next().unwrap_or(""), "ui", json!({ "k": key, "v": v })); } }
+    if changed { if let Some(app) = APP.get() {
+        if let Err(e) = app.emit_to(key.split('.').next().unwrap_or(""), "ui", json!({ "k": key, "v": v })) {
+            let _ = std::fs::write(crate::store::dir().join("rust-emit-erro.log"), format!("{key}: {e}"));
+        }
+    } }
 }
 
 /// Valor que a tela mudou (ex.: página, chat aberto): guarda sem mandar de volta.

@@ -68,6 +68,10 @@ jobs:
             [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
             [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
             [DllImport("user32.dll")] static extern int GetWindowTextLength(IntPtr h);
+            [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, System.Text.StringBuilder b, int n);
+            [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, System.Text.StringBuilder b, int n);
+            [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+            public static string List(int pid) { var o = new System.Text.StringBuilder(); EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); if (p == pid) { var t = new System.Text.StringBuilder(256); var c = new System.Text.StringBuilder(256); GetWindowText(h, t, 256); GetClassName(h, c, 256); o.Append("[" + t + "|" + c + "|vis=" + IsWindowVisible(h) + "] "); } return true; }, IntPtr.Zero); return o.ToString(); }
             public static void CloseAll(int pid) { EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); if (p == pid && GetWindowTextLength(h) > 0) PostMessage(h, 0x10, IntPtr.Zero, IntPtr.Zero); return true; }, IntPtr.Zero); }
           } }
           "@
@@ -131,10 +135,22 @@ jobs:
           [W.M]::mouse_event(0x0800, 0, 0, -120, [System.UIntPtr]::Zero)
           Start-Sleep 1
           Shot "12-roda-de-novo"
+          # Diagnóstico: o notch fecha com o mouse longe antes e depois de abrir as configurações?
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 900, 700
+          Start-Sleep 1
+          Shot "12z-longe"
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($w / 2)), 10
+          Start-Sleep 1
           # Engrenagem (ao lado do X) abre as configurações.
           Click (($w + 620) / 2 - 91) 22
           Start-Sleep 1
           Shot "13-configuracoes"
+          "janelas=$([W.Win]::List($p.Id))" | Out-File ci\resultado.txt -Append
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 1000, 760
+          Start-Sleep 1
+          Shot "13z-longe"
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($w / 2)), 10
+          Start-Sleep 1
           # Fechar e abrir de novo pela engrenagem (antes não reabria). Fecha mandando "fechar" para as janelas
           # do Orbi com título (o notch ignora; as configurações se escondem). A janela sem título do Tauri leva os
           # avisos do Rust para a tela, e fechá-la congelava o notch. Alt+F4 fechava a janela em foco, que às vezes era a
@@ -232,6 +248,7 @@ jobs:
           Shot "14-atualizado"
           if (Test-Path "$env:APPDATA\Orbi\rust-erro.log") { Copy-Item "$env:APPDATA\Orbi\rust-erro.log" ci\erro.log }
           if (Test-Path "$env:APPDATA\Orbi\rust-diag.txt") { Copy-Item "$env:APPDATA\Orbi\rust-diag.txt" ci\diag.txt }
+          if (Test-Path "$env:APPDATA\Orbi\rust-emit-erro.log") { Copy-Item "$env:APPDATA\Orbi\rust-emit-erro.log" ci\emit-erro.log }
           if (Test-Path "$env:APPDATA\Orbi\rust-agentes.log") { Copy-Item "$env:APPDATA\Orbi\rust-agentes.log" ci\agentes.log }
           if (-not $p.HasExited) { Stop-Process $p -Force }
           # O resultado é conferido no passo "Falhar se fechou"; o código de saída do último curl não conta.
