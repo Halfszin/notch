@@ -1,0 +1,15 @@
+     0 ms  abriu
+     0 ms  instância única
+   404 ms  setup do tauri
+   405 ms  notch.init();
+   463 ms  tela pediu o estado
+   758 ms  system::setup(&notch);
+   758 ms  media::start(&notch);
+   759 ms  pages::setup(&notch);
+   760 ms  features::setup(&notch);
+   763 ms  settings::setup(&notch);
+  1066 ms  agents::setup
+  1067 ms  settings::upgrade_agents();
+  1067 ms  settings::refresh_agents(&notch);
+  1068 ms  features::chat(&notch);
+  1068 ms  features::weather(&notch);

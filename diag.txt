@@ -1,0 +1,5 @@
+escala=1
+tela=1024x768
+janela_pos=Some(PhysicalPosition { x: 182, y: 0 })
+janela_tam=Some(PhysicalSize { width: 660, height: 300 })
+notch_fechado=120x30
