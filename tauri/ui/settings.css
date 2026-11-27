@@ -1,4 +1,4 @@
-/* Configurações: cores e medidas do notch.slint (janela Settings). */
+/* Configurações: cores e medidas da versão anterior em Slint (janela Settings). */
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body { display: flex; background: #0B0B0C; color: #fff; font: 13px "Segoe UI", system-ui, sans-serif; user-select: none; overflow: hidden; }
