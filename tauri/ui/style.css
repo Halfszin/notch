@@ -257,13 +257,13 @@ body.sc-adding #sc-add { display: flex; }
 
 /* 8: agentes */
 #p8 { flex-direction: column; gap: 8px; }
-#perm { display: none; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: #1C1C20; }
+#perm { display: none; flex: 1; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: #1C1C20; }
 body.perm #perm { display: flex; }
 .perm-head { display: flex; align-items: center; gap: 8px; }
 .perm-head .icon { color: #FF9F0A; font-size: 14px; }
 #perm-what { flex: 1; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #perm-project { font-size: 12px; color: var(--gray); }
-#perm-code { min-height: 44px; max-height: 64px; overflow: hidden; border-radius: 8px; background: #0E0E10; padding: 6px 10px; font: 12px Consolas, monospace; color: #E5E5EA; display: flex; align-items: center; white-space: pre-wrap; word-break: break-word; }
+#perm-code { flex: 1; min-height: 44px; overflow: hidden; border-radius: 8px; background: #0E0E10; padding: 6px 10px; font: 12px Consolas, monospace; color: #E5E5EA; display: flex; align-items: center; white-space: pre-wrap; word-break: break-word; }
 #agents-empty { flex: 1; display: none; flex-direction: column; justify-content: center; align-items: center; gap: 4px; text-align: center; }
 #agents-empty b { font-size: 14px; font-weight: 600; }
 #agents-empty span { font-size: 12px; color: var(--gray); }
@@ -275,6 +275,7 @@ body:not(.perm):not(.no-agents) #agent-list { display: flex; }
 .agent.busy .dot { background: #0A84FF; }
 .agent b { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 .agent span { font-size: 12px; color: #AEAEB2; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#plan { display: flex; flex-direction: column; gap: 8px; }
 .plan { display: flex; align-items: center; gap: 10px; height: 16px; font-size: 11.5px; color: #AEAEB2; }
 .plan .n { width: 56px; }
 .plan .bar { flex: 1; height: 4px; border-radius: 2px; background: #FFFFFF22; overflow: hidden; }
