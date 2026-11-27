@@ -1,0 +1,94 @@
+name: tauri
+
+on:
+  push:
+    branches: [main]
+    paths: ["tauri/**", ".github/workflows/tauri.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tauri-preview
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: tauri/src-tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tauri/src-tauri
+
+      - name: Testes
+        run: cargo test --release
+
+      - name: Compilar
+        run: cargo build --release
+
+      - name: Abrir o Orbi (Tauri) e tirar prints
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          New-Item -ItemType Directory ci -Force | Out-Null
+          function Shot($name) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save("ci\$name.png")
+            Write-Host "print: $name"
+          }
+          $exe = "target\release\orbi-tauri.exe"
+          "tamanho=$([math]::Round((Get-Item $exe).Length / 1MB, 1)) MB" | Out-File ci\resultado.txt
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 900, 700
+          $p = Start-Process $exe -PassThru
+          Start-Sleep 8
+          Shot "1-fechado"
+          $w = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($w / 2)), 10
+          Start-Sleep -Milliseconds 120
+          Shot "2-abrindo"
+          Start-Sleep 1
+          Shot "3-aberto"
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 900, 700
+          Start-Sleep -Milliseconds 150
+          Shot "4-fechando"
+          Start-Sleep 1
+          Shot "5-fechou"
+          "vivo=$(-not $p.HasExited)" | Out-File ci\resultado.txt -Append
+          "memoria_mb=$([math]::Round((Get-Process -Id $p.Id -ErrorAction SilentlyContinue).WorkingSet64 / 1MB, 0))" | Out-File ci\resultado.txt -Append
+          "webview_mb=$([math]::Round(((Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Measure-Object WorkingSet64 -Sum).Sum) / 1MB, 0))" | Out-File ci\resultado.txt -Append
+          if (-not $p.HasExited) { Stop-Process $p -Force }
+          exit 0
+
+      - name: Guardar prints no branch ci-results-tauri
+        shell: bash
+        run: |
+          cd ci
+          git init -q -b ci-results-tauri && git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "tauri ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-results-tauri
+
+      - name: Falhar se fechou
+        shell: pwsh
+        run: if (-not (Select-String -Path ci\resultado.txt -Pattern 'vivo=True' -Quiet)) { exit 1 }
+
+      - name: Publicar a prévia
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp target/release/orbi-tauri.exe Orbi-tauri.exe
+          for i in 1 2 3; do
+            gh release upload tauri-preview Orbi-tauri.exe --clobber && exit 0
+            gh release create tauri-preview Orbi-tauri.exe --target main --prerelease --title "Orbi em Tauri (base)" \
+              --notes "Base nova do Orbi (motor Rust + tela em HTML). Por enquanto so o notch abrindo e fechando. Nao substitui o Orbi atual." && exit 0
+            sleep $((i * 10))
+          done
+          exit 1

@@ -1,0 +1,78 @@
+/* Medidas e tempos iguais aos do Orbi em Slint: fechado 120 x 30, aberto 620 x 262. */
+:root {
+  --closed-w: 120px; --closed-h: 30px;
+  --open-w: 620px;   --open-h: 262px;
+  --green: #30D158; --yellow: #FFD60A; --red: #FF453A; --gray: #8E8E93;
+}
+
+html, body {
+  margin: 0;
+  width: 100%; height: 100%;
+  background: transparent;
+  overflow: hidden;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: #fff;
+  user-select: none;
+  cursor: default;
+}
+
+#pill {
+  position: absolute;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: var(--closed-w);
+  height: var(--closed-h);
+  background: #000;
+  border-radius: 0 0 28px 28px;
+  overflow: hidden;
+  /* Recolher: direto, sem passar do ponto. */
+  transition: width 300ms ease-out, height 300ms ease-out, border-radius 300ms;
+}
+body.open #pill {
+  width: var(--open-w);
+  height: var(--open-h);
+  border-radius: 0 0 30px 30px;
+  /* Abrir: com o "pulinho" (passa um pouco e volta), como no Orbi de hoje. */
+  transition: width 420ms cubic-bezier(.34, 1.56, .64, 1), height 420ms cubic-bezier(.34, 1.56, .64, 1), border-radius 300ms;
+}
+
+/* Fechado: some na hora ao abrir; volta só depois do notch encolher. */
+#closed {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 13px; font-weight: 600;
+  opacity: 1;
+  transition: opacity 150ms 200ms;
+}
+body.open #closed { opacity: 0; transition: opacity 150ms; }
+
+/* Aberto: aparece depois do notch crescer; some antes dele encolher. */
+#open {
+  position: absolute; top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: var(--open-w); height: var(--open-h);
+  box-sizing: border-box;
+  padding: 10px 46px 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 100ms;
+}
+body.open #open { opacity: 1; pointer-events: auto; transition: opacity 220ms 90ms; }
+
+header { display: flex; align-items: center; height: 24px; gap: 8px; }
+header .title { width: 150px; font-size: 14px; display: flex; gap: 4px; }
+header .title span { color: var(--green); font-weight: 700; }
+header .when { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12.5px; }
+header .spacer { width: 150px; }
+
+main { height: calc(100% - 24px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+main .hello { margin: 0; font-size: 16px; font-weight: 600; }
+main .sub { margin: 0; font-size: 12px; color: var(--gray); }
+
+/* Anel da bateria (pontas redondas, começa no topo). Sem bateria: escondido. */
+.ring { width: 18px; height: 18px; transform: rotate(-90deg); }
+.ring.small { width: 16px; height: 16px; }
+.ring circle { fill: none; stroke-width: 2.5; }
+.ring .track { stroke: #2E2E31; }
+.ring .arc { stroke: var(--ring, var(--green)); stroke-linecap: round; stroke-dasharray: var(--pct, 100) 100; transition: stroke-dasharray 400ms; }
+body.no-battery .ring { display: none; }

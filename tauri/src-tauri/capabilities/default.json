@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "A tela do notch ouve os eventos do Rust (mouse em cima, bateria).",
+  "windows": ["notch"],
+  "permissions": ["core:default"]
+}

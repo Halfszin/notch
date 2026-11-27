@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Orbi</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- O notch: fechado (anel da bateria + hora) e aberto (cabeçalho + conteúdo). -->
+  <div id="pill">
+    <div id="closed">
+      <svg id="ring" class="ring" viewBox="0 0 18 18" aria-hidden="true">
+        <circle class="track" cx="9" cy="9" r="7.75"/>
+        <circle class="arc" cx="9" cy="9" r="7.75" pathLength="100"/>
+      </svg>
+      <span id="clock-closed">--:--</span>
+    </div>
+    <div id="open">
+      <header>
+        <div class="title"><b>Orbi</b><span>Tauri</span></div>
+        <div class="when">
+          <svg class="ring small" viewBox="0 0 18 18" aria-hidden="true">
+            <circle class="track" cx="9" cy="9" r="7.75"/>
+            <circle class="arc" cx="9" cy="9" r="7.75" pathLength="100"/>
+          </svg>
+          <span id="date">—</span>
+          <b id="clock-open">--:--</b>
+        </div>
+        <div class="spacer"></div>
+      </header>
+      <main>
+        <p class="hello">Base nova do Orbi, com a tela em HTML.</p>
+        <p class="sub">As páginas (música, tarefas, chat…) chegam nas próximas etapas.</p>
+      </main>
+    </div>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>
