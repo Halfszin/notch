@@ -6,19 +6,32 @@ use serde_json::{json, Map, Value};
 /// Marca das entradas do Orbi no settings.json do Claude Code (a mesma do Orbi em C#: uma troca a outra).
 pub const MARKER: &str = "# orbi-hook";
 
-/// Eventos ouvidos e o tempo máximo de cada hook (PermissionRequest espera você decidir).
-pub const EVENTS: [(&str, u64); 7] = [
-    ("SessionStart", 10), ("SessionEnd", 10), ("UserPromptSubmit", 10), ("PreToolUse", 10),
+/// Eventos ouvidos e o tempo máximo de cada hook (PermissionRequest espera você decidir). SessionStart não aceita
+/// hook HTTP; a sessão aparece no notch no primeiro pedido (UserPromptSubmit).
+pub const EVENTS: [(&str, u64); 6] = [
+    ("SessionEnd", 10), ("UserPromptSubmit", 10), ("PreToolUse", 10),
     ("PermissionRequest", 120), ("Notification", 10), ("Stop", 10),
 ];
 
-/// No Windows o Claude Code roda hooks pelo Git Bash: um curl simples. "|| true": com o Orbi fechado, segue normal.
-pub fn command(port: u16, token: &str, evt: &str, max_secs: u64) -> String {
-    format!("curl -s -m {max_secs} --data-binary @- http://127.0.0.1:{port}/{token}/{evt} || true {MARKER}")
+/// Endereço de um evento. O "?orbi-hook" no fim marca as entradas do Orbi no settings.json.
+pub fn url(port: u16, token: &str, evt: &str) -> String {
+    format!("http://127.0.0.1:{port}/{token}/{evt}?orbi-hook")
 }
 
+/// Hook HTTP: o Claude Code manda o evento direto, sem terminal (o comando com curl quebrava no PowerShell,
+/// usado quando não há Git Bash). Orbi fechado: o Claude Code segue normal.
+fn hook(port: u16, token: &str, evt: &str, timeout: u64) -> Value {
+    json!({ "type": "http", "url": url(port, token, evt), "timeout": timeout })
+}
+
+/// Status line (limites do plano) só aceita comando: curl.exe e "@-" entre aspas funcionam no PowerShell e no Git Bash.
+pub fn status_command(port: u16, token: &str) -> String {
+    format!("curl.exe -s -m 2 --data-binary \"@-\" http://127.0.0.1:{port}/{token}/statusline {MARKER}")
+}
+
+/// Entrada do Orbi: comando com a marca (versões antigas e a status line) ou hook HTTP com "orbi-hook" no endereço.
 fn is_ours_command(v: &Value) -> bool {
-    v.get("command").and_then(|c| c.as_str()).is_some_and(|c| c.contains(MARKER))
+    ["command", "url"].iter().any(|k| v.get(*k).and_then(|c| c.as_str()).is_some_and(|c| c.contains("orbi-hook")))
 }
 
 fn is_ours_entry(v: &Value) -> bool {
@@ -32,15 +45,17 @@ pub fn merge(existing: Option<Value>, port: u16, token: &str) -> Result<(Value, 
     let obj = root.as_object_mut().ok_or("o settings.json do Claude Code não é um objeto JSON; nada foi alterado")?;
     let hooks = obj.entry("hooks").or_insert_with(|| json!({})).as_object_mut()
         .ok_or("o \"hooks\" do settings.json está num formato desconhecido; nada foi alterado")?;
+    // Tira as entradas do Orbi de antes (inclusive de eventos que não usamos mais, ex.: SessionStart com curl).
+    for list in hooks.values_mut().filter_map(|l| l.as_array_mut()) { list.retain(|e| !is_ours_entry(e)); }
+    hooks.retain(|_, l| l.as_array().is_none_or(|a| !a.is_empty()));
     for (evt, timeout) in EVENTS {
         let list = hooks.entry(evt).or_insert_with(|| json!([])).as_array_mut()
             .ok_or(format!("o hook \"{evt}\" do settings.json está num formato desconhecido; nada foi alterado"))?;
-        list.retain(|e| !is_ours_entry(e));
-        list.push(json!({ "hooks": [{ "type": "command", "command": command(port, token, evt, timeout - 5), "timeout": timeout }] }));
+        list.push(json!({ "hooks": [hook(port, token, evt, timeout)] }));
     }
     let status = obj.get("statusLine").is_none_or(is_ours_command);
     if status {
-        obj.insert("statusLine".into(), json!({ "type": "command", "command": command(port, token, "statusline", 2) }));
+        obj.insert("statusLine".into(), json!({ "type": "command", "command": status_command(port, token) }));
     }
     Ok((root, status))
 }
@@ -191,7 +206,7 @@ mod win {
     fn serve(mut conn: TcpStream, token: &str, weak: slint::Weak<Notch>) -> std::io::Result<()> {
         conn.set_read_timeout(Some(Duration::from_secs(10)))?;
         let (path, body) = read_request(&mut conn)?;
-        let parts: Vec<&str> = path.trim_matches('/').split('/').collect();
+        let parts: Vec<&str> = path.split('?').next().unwrap_or("").trim_matches('/').split('/').collect();
         // Código secreto comparado sem atalho (tempo igual): um site ou outro programa não adivinha nem aprova nada.
         let ok = parts.len() == 2 && parts[0].len() == token.len() && parts[0].bytes().zip(token.bytes()).fold(0u8, |a, (x, y)| a | (x ^ y)) == 0;
         if !ok { return reply(&mut conn, 403, ""); }
@@ -409,6 +424,8 @@ mod tests {
         assert!(is_installed(&merged));
         assert_eq!(merged["hooks"]["Stop"].as_array().unwrap().len(), 2);
         assert_eq!(merged["hooks"]["PermissionRequest"][0]["hooks"][0]["timeout"], 120);
+        assert_eq!(merged["hooks"]["Stop"][1]["hooks"][0]["type"], "http");
+        assert!(merged["hooks"]["Stop"][1]["hooks"][0]["url"].as_str().unwrap().ends_with("/abc/Stop?orbi-hook"));
         // Ligar de novo não duplica.
         let (again, _) = merge(Some(merged.clone()), 47831, "abc").unwrap();
         assert_eq!(again["hooks"]["Stop"].as_array().unwrap().len(), 2);
@@ -418,6 +435,14 @@ mod tests {
         let (fresh, status) = merge(None, 1, "t").unwrap();
         assert!(status && fresh["statusLine"]["command"].as_str().unwrap().contains(MARKER));
         assert!(merge(Some(json!({ "hooks": [] })), 1, "t").is_err());
+        // Versão antiga (curl no SessionStart): ligar de novo limpa, e o SessionStart dos outros fica.
+        let old = json!({ "hooks": {
+            "SessionStart": [{ "hooks": [{ "type": "command", "command": "curl -s x || true # orbi-hook" }] }, { "hooks": [{ "type": "command", "command": "coucou-hook.exe SessionStart" }] }],
+            "Stop": [{ "hooks": [{ "type": "command", "command": "curl -s y || true # orbi-hook" }] }] } });
+        let (upgraded, _) = merge(Some(old), 1, "t").unwrap();
+        assert_eq!(upgraded["hooks"]["SessionStart"].as_array().unwrap().len(), 1);
+        assert_eq!(upgraded["hooks"]["Stop"].as_array().unwrap().len(), 1);
+        assert_eq!(upgraded["hooks"]["Stop"][0]["hooks"][0]["type"], "http");
     }
 
     #[test]
