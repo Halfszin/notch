@@ -69,7 +69,7 @@ $("restart-update").addEventListener("click", () => call("restart_update"));
 $("open-folder").addEventListener("click", () => call("open_folder"));
 $("quit").addEventListener("click", () => call("quit"));
 
-(function loop(t) { avatar($("avatar"), 0, 0, 0, t); requestAnimationFrame(loop); })(0);
+addAvatar($("avatar"), {}); // olha em volta sozinho; clique faz cócegas
 
 listen("ui", ({ payload: { k, v } }) => {
   if (!k.startsWith("settings.")) return;

@@ -53,8 +53,10 @@ function draw() {
     e0: !side, e1: S.edge === 1, e2: S.edge === 2, open, toasting: !!S.toasting, "hide-closed": open || S.toasting || S.game_mode,
     playing: !!S.playing, compact: !!S.compact, chat, game: !!S.game_mode, focusing: !!S.focus_running,
     "has-cover": !!S.has_cover, "has-lyrics": !!S.has_lyrics, "lyrics-on": !!S.lyrics_on, "with-lyrics": !!withLyrics,
-    adding: !!S.adding && page === 1, "sc-adding": !!S.sc_adding, perm: !!S.perm_visible, "no-agents": !(S.agent_rows || []).length,
+    adding: !!S.adding && page === 1, "no-tasks": !(S.tasks || []).length, "sc-adding": !!S.sc_adding, perm: !!S.perm_visible, "no-agents": !(S.agent_rows || []).length,
   };
+  // Abriu o notch: o personagem dá um pulinho de "oi".
+  if (open && !b.contains("open")) setTimeout(() => hero.react("hop"), 250);
   for (const k in flags) b.toggle(k, !!flags[k]);
 
   // ---- pílula: tamanho, cantos, batida e fundo ----
@@ -151,9 +153,8 @@ function drawMusic() {
 function drawTasks() {
   text($("tasks-count"), `${S.tasks_done || 0}/${S.tasks_total || 0}`);
   const tasks = S.tasks || [];
-  html($("task-list"), tasks.length ? tasks.map((k, i) =>
-    `<div class="task ${k.done ? "done" : ""}" data-task="${i}"><span class="check">${k.done ? "&#xE73E;" : ""}</span><span class="t">${esc(k.title)}</span>${k.due ? `<span class="due">${esc(k.due)}</span>` : ""}</div>`).join("")
-    : `<div class="empty">Nenhuma tarefa. Clique em Adicionar.</div>`);
+  html($("task-list"), tasks.map((k, i) =>
+    `<div class="task ${k.done ? "done" : ""}" data-task="${i}"><span class="check">${k.done ? "&#xE73E;" : ""}</span><span class="t">${esc(k.title)}</span>${k.due ? `<span class="due">${esc(k.due)}</span>` : ""}</div>`).join(""));
 }
 
 function drawFocus() {
@@ -196,6 +197,7 @@ function drawAgents() {
   text($("perm-project"), (S.perm_project || "") + (S.perm_count > 1 ? `  ·  +${S.perm_count - 1}` : ""));
   text($("perm-code"), S.perm_code);
   const e = $("agents-empty");
+  agentsAvatar.mood = S.agents_connected ? "idle" : "sleepy";
   text(e.querySelector("b"), S.agents_connected ? "Nenhuma sessão do Claude Code agora" : "Claude Code não está conectado");
   text(e.querySelector("span"), S.agents_connected ? "Abra o Claude Code: as sessões, o que ele está fazendo e os pedidos de permissão aparecem aqui." : "Conecte em Configurações → Agentes.");
   html($("agent-list"), (S.agent_rows || []).map((a) =>
@@ -218,11 +220,11 @@ function drawChat() {
   $("chat-send").classList.toggle("can", input.value !== "" && !S.chat_busy);
 }
 
-(function loop(t) {
-  const a = $("avatar");
-  if (document.body.classList.contains("open") && a.offsetParent) avatar(a, S.look_x || 0, S.look_y || 0, S.playing ? S.level || 0 : 0, t);
-  requestAnimationFrame(loop);
-})(0);
+// Personagem: segue o mouse e dança com a música no player; feliz sem tarefas; dorme sem o Claude Code.
+const isOpen = () => document.body.classList.contains("open");
+const hero = addAvatar($("avatar"), {}, () => ({ lookX: S.look_x ?? 0, lookY: S.look_y ?? 0, playing: S.playing, level: S.level, pulse: S.pulse }), isOpen);
+addAvatar($("tasks-avatar"), { mood: "happy" }, () => ({ lookX: S.look_x ?? 0, lookY: S.look_y ?? 0 }), isOpen);
+const agentsAvatar = addAvatar($("agents-avatar"), {}, () => ({}), isOpen);
 
 // ---------- ações ----------
 const pill = $("pill");
@@ -321,7 +323,7 @@ pill.addEventListener("wheel", (e) => {
 // Segurar e arrastar o fundo do notch: ele corre pela borda e pula para a borda mais perto.
 let dragging = false, moveQueued = false;
 pill.addEventListener("pointerdown", (e) => {
-  if (e.button !== 0 || e.target.closest("button, input, textarea, [data-task], [data-clip], [data-sc], [data-pos], [data-lyr], #volume, .msg")) return;
+  if (e.button !== 0 || e.target.closest("button, input, textarea, [data-task], [data-clip], [data-sc], [data-pos], [data-lyr], #volume, .msg, .avatar, .mini-avatar")) return;
   dragging = true; pill.setPointerCapture(e.pointerId); call("drag_start");
 });
 pill.addEventListener("pointermove", () => {

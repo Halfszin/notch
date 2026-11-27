@@ -139,9 +139,10 @@ input.line:focus { border-color: #FFFFFF55; }
 #p0 { gap: 16px; }
 .avatar { position: relative; width: 140px; flex: none; }
 body.compact .avatar { width: 96px; }
-.avatar .body { position: absolute; border-radius: 50%; background: #fff; box-shadow: 0 0 28px #FFE2B855; }
-.avatar .eye { position: absolute; border-radius: 999px; background: #111316; }
-.avatar svg { position: absolute; overflow: visible; }
+.mini-avatar { position: relative; width: 80px; height: 60px; flex: none; }
+#tasks-empty { flex: 1; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--gray); font-size: 13px; }
+body.no-tasks #tasks-empty { display: flex; }
+body.no-tasks #task-list { display: none; }
 #player { width: 360px; display: flex; flex-direction: column; justify-content: center; gap: 10px; flex: none; }
 body.compact #player { width: 340px; }
 body.with-lyrics #player { width: 260px; }
