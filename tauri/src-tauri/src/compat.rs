@@ -128,7 +128,8 @@ pub fn put(key: &str, v: Value) {
         let mut s = STATE.lock().unwrap();
         s.get_or_insert_with(Map::new).insert(key.to_string(), v.clone()) != Some(v.clone())
     };
-    if changed { if let Some(app) = APP.get() { let _ = app.emit("ui", json!({ "k": key, "v": v })); } }
+    // Só para a janela dona do valor ("notch.x" → notch, "settings.x" → configurações).
+    if changed { if let Some(app) = APP.get() { let _ = app.emit_to(key.split('.').next().unwrap_or(""), "ui", json!({ "k": key, "v": v })); } }
 }
 
 /// Valor que a tela mudou (ex.: página, chat aberto): guarda sem mandar de volta.
@@ -347,6 +348,7 @@ impl Settings {
         }
         Ok(())
     }
+    /// A janela existe (escondida pelo X conta: show() mostra de novo).
     pub fn is_open() -> bool { APP.get().and_then(|a| a.get_webview_window("settings")).is_some() }
 }
 

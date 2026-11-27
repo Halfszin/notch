@@ -73,8 +73,10 @@ fn main() {
         .invoke_handler(tauri::generate_handler![ui_call, ui_set, ui_state])
         .on_window_event(|window, event| {
             // Fechar o notch pelo Alt+F4 não derruba o Orbi; sair é pelo X do notch ou nas configurações.
+            // As configurações só se escondem: destruir e recriar a janela travava os avisos do Rust para a tela.
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "notch" { api.prevent_close(); }
+                api.prevent_close();
+                if window.label() == "settings" { let _ = window.hide(); }
             }
         })
         .setup(|app| {
