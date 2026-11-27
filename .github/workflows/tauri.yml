@@ -149,6 +149,16 @@ jobs:
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 1000, 760
           Start-Sleep 1
           Shot "13z-longe"
+          # Diagnóstico: o notch ainda responde depois que o atualizador troca o .exe?
+          for ($i = 0; $i -lt 40 -and -not (Test-Path run\orbi.exe.old); $i++) { Start-Sleep 2 }
+          "trocou_exe_antes_de_fechar=$(Test-Path run\orbi.exe.old) aos $([int]((Get-Date) - $inicio).TotalSeconds) s" | Out-File ci\resultado.txt -Append
+          Start-Sleep 2
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($w / 2)), 10
+          Start-Sleep 1
+          Shot "13y-abre-depois-da-troca"
+          [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 1000, 760
+          Start-Sleep 1
+          Shot "13x-fecha-depois-da-troca"
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($w / 2)), 10
           Start-Sleep 1
           # Fechar e abrir de novo pela engrenagem (antes não reabria). Fecha mandando "fechar" para as janelas
