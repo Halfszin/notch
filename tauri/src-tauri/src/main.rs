@@ -1,109 +1,103 @@
-// Orbi em Tauri: o Rust cuida da janela (transparente, sempre por cima, clique passando quando fechado),
-// do mouse e da bateria; a tela (ui/) é HTML/CSS/JS no WebView2 do Windows.
+// Orbi: o notch do Windows. O motor é Rust (estes módulos) e a tela é HTML/CSS/JS (pasta ui/), no WebView2,
+// pelo Tauri. compat.rs liga os dois: propriedades viram eventos "ui" e os botões chamam "ui_call".
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use serde::Serialize;
-use std::time::{Duration, Instant};
-use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
+mod agents;
+mod chat;
+mod color;
+mod compat;
+mod features;
+mod lyrics;
+mod media;
+mod notifications;
+mod pages;
+mod settings;
+mod spectrum;
+mod store;
+mod system;
+mod taskparse;
+mod updater;
+mod weather;
+mod winapi;
 
-/// Medidas lógicas, iguais às do Orbi em Slint: janela fixa do tamanho do notch aberto.
-const WIN_W: f64 = 660.0;
-const WIN_H: f64 = 300.0;
-const CLOSED: (f64, f64) = (120.0, 30.0);
-const OPEN: (f64, f64) = (620.0, 262.0);
+pub use compat::{AgentRow, ChatMsg, DayCell, Notch, PageEntry, Settings, ShortcutItem, TaskRow};
+use serde_json::Value;
+use tauri::Manager;
 
-#[derive(Serialize, Clone)]
-struct Battery { pct: u8, charging: bool, has: bool }
+/// Erros vão para %AppData%\Orbi\rust-erro.log (o app não tem console para mostrar).
+fn log_error(msg: &str) {
+    let _ = std::fs::create_dir_all(store::dir());
+    let _ = std::fs::write(store::dir().join("rust-erro.log"), msg);
+}
+
+/// A tela chamou um botão/ação do notch ou das configurações (ex.: "notch.play_pause").
+#[tauri::command]
+fn ui_call(name: String, args: Vec<Value>) {
+    let _ = compat::invoke_from_event_loop(move || compat::fire(&name, &args));
+}
+
+/// A tela mudou um valor que o motor também lê (página, chat aberto, foco no texto, volume...).
+#[tauri::command]
+fn ui_set(key: String, value: Value) {
+    compat::put_quiet(&key, value);
+}
+
+/// Estado completo, pedido pela tela ao carregar.
+#[tauri::command]
+fn ui_state() -> Value {
+    compat::snapshot()
+}
 
 fn main() {
-    tauri::Builder::default()
+    std::panic::set_hook(Box::new(|info| log_error(&format!("pane: {info}"))));
+    // Teste do CI: busca uma letra de verdade no LRCLIB (com álbum e sem álbum) e grava o resultado.
+    if std::env::args().any(|a| a == "--testar-letra") {
+        let count = |l: Option<Vec<lyrics::Line>>| l.map_or(0, |l| l.len());
+        let text = format!(
+            "com_album={}\nsem_album={}\nlrclib: {}\nicone_do_explorer={}\nsom_do_windows={}\n",
+            count(lyrics::fetch("Coldplay", "Yellow", "Parachutes", 269.0)),
+            count(lyrics::fetch("Coldplay", "Yellow", "", 0.0)),
+            lyrics::probe(),
+            {
+                unsafe { let _ = windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_APARTMENTTHREADED); }
+                winapi::app_icon("Microsoft.Windows.Explorer", 48).map(|(w, h, px)| format!("{w}x{h} visiveis={}", px.chunks(4).filter(|p| p[3] > 0).count())).unwrap_or("nenhum".into())
+            },
+            std::path::Path::new(&(std::env::var("WINDIR").unwrap_or_default() + "\\Media\\Windows Notify Messaging.wav")).exists(),
+        );
+        let _ = std::fs::create_dir_all(store::dir());
+        let _ = std::fs::write(store::dir().join("rust-letra.txt"), text);
+        return;
+    }
+    if !settings::claim_instance() { return; }
+    let result = tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![ui_call, ui_set, ui_state])
+        .on_window_event(|window, event| {
+            // Fechar o notch pelo Alt+F4 não derruba o Orbi; sair é pelo X do notch ou nas configurações.
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "notch" { api.prevent_close(); }
+            }
+        })
         .setup(|app| {
-            let win = app.get_webview_window("notch").expect("janela do notch");
-            place(&win)?;
-            // Fechado, a janela deixa o mouse passar; quem abre é a posição do mouse, lida no Rust.
-            win.set_ignore_cursor_events(true)?;
-            std::thread::spawn(move || watch(win));
+            compat::set_app(app.handle().clone());
+            if let Some(w) = app.get_webview_window("notch") { let _ = w.set_ignore_cursor_events(true); }
+            compat::start_core(|| {
+                let notch = Notch;
+                notch.init();
+                system::setup(&notch);
+                media::start(&notch);
+                pages::setup(&notch);
+                features::setup(&notch);
+                settings::setup(&notch);
+                let p = settings::get();
+                // ORBI_SEM_AGENTES=1: abre sem o servidor dos agentes (diagnóstico do CI).
+                if std::env::var_os("ORBI_SEM_AGENTES").is_none() { agents::setup(&notch, p.agent_port, p.agent_token); }
+                settings::upgrade_agents();
+                settings::refresh_agents(&notch);
+                features::chat(&notch);
+                features::weather(&notch);
+            });
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("erro ao abrir o Orbi");
-}
-
-/// Topo da tela, centralizado.
-fn place(win: &WebviewWindow) -> tauri::Result<()> {
-    let Some(m) = win.current_monitor()? else { return Ok(()) };
-    let s = m.scale_factor();
-    let (w, h) = ((WIN_W * s) as u32, (WIN_H * s) as u32);
-    win.set_size(PhysicalSize::new(w, h))?;
-    win.set_position(PhysicalPosition::new(m.position().x + (m.size().width as i32 - w as i32) / 2, m.position().y))?;
-    Ok(())
-}
-
-/// O notch (centralizado no topo da janela) contém o ponto? Margem de 2 px acima: encostar na borda da tela abre.
-pub fn inside(cursor: (f64, f64), win_pos: (f64, f64), win_w: f64, scale: f64, open: bool) -> bool {
-    let (pw, ph) = if open { OPEN } else { CLOSED };
-    let (pw, ph) = (pw * scale, ph * scale);
-    let left = win_pos.0 + (win_w - pw) / 2.0;
-    cursor.0 >= left && cursor.0 <= left + pw && cursor.1 >= win_pos.1 - 2.0 && cursor.1 <= win_pos.1 + ph
-}
-
-/// A cada 30 ms: mouse em cima abre (e a janela passa a aceitar clique); a cada segundo: bateria e "sempre por cima".
-fn watch(win: WebviewWindow) {
-    let mut open = false;
-    let mut last_slow = Instant::now() - Duration::from_secs(2);
-    loop {
-        if let (Some(c), Ok(pos), Ok(size), Ok(scale)) = (cursor(), win.outer_position(), win.outer_size(), win.scale_factor()) {
-            let now_open = inside(c, (pos.x as f64, pos.y as f64), size.width as f64, scale, open);
-            if now_open != open {
-                open = now_open;
-                let _ = win.set_ignore_cursor_events(!open);
-                let _ = win.emit("notch", open);
-            }
-        }
-        if last_slow.elapsed() >= Duration::from_secs(1) {
-            last_slow = Instant::now();
-            let _ = win.emit("battery", battery());
-            let _ = win.set_always_on_top(true);
-        }
-        std::thread::sleep(Duration::from_millis(30));
-    }
-}
-
-#[cfg(windows)]
-fn cursor() -> Option<(f64, f64)> {
-    let mut p = windows::Win32::Foundation::POINT::default();
-    unsafe { windows::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut p) }.ok()?;
-    Some((p.x as f64, p.y as f64))
-}
-
-#[cfg(windows)]
-fn battery() -> Battery {
-    let mut s = windows::Win32::System::Power::SYSTEM_POWER_STATUS::default();
-    if unsafe { windows::Win32::System::Power::GetSystemPowerStatus(&mut s) }.is_err() || s.BatteryLifePercent > 100 {
-        return Battery { pct: 100, charging: false, has: false }; // 255 = PC sem bateria
-    }
-    Battery { pct: s.BatteryLifePercent, charging: s.ACLineStatus == 1, has: true }
-}
-
-#[cfg(not(windows))]
-fn cursor() -> Option<(f64, f64)> { None }
-#[cfg(not(windows))]
-fn battery() -> Battery { Battery { pct: 100, charging: false, has: false } }
-
-#[cfg(test)]
-mod tests {
-    use super::inside;
-
-    #[test]
-    fn area_do_notch() {
-        // Janela de 660 px em x=630 (tela de 1920): notch fechado de 120 px vai de 900 a 1020.
-        assert!(inside((960.0, 10.0), (630.0, 0.0), 660.0, 1.0, false));
-        assert!(!inside((880.0, 10.0), (630.0, 0.0), 660.0, 1.0, false));
-        assert!(!inside((960.0, 40.0), (630.0, 0.0), 660.0, 1.0, false));
-        // Aberto, a área cresce para 620 x 262.
-        assert!(inside((700.0, 200.0), (630.0, 0.0), 660.0, 1.0, true));
-        // Escala 150%: tudo multiplica.
-        assert!(inside((1440.0, 40.0), (945.0, 0.0), 990.0, 1.5, false));
-        assert!(!inside((1440.0, 50.0), (945.0, 0.0), 990.0, 1.5, false));
-    }
+        .run(tauri::generate_context!());
+    if let Err(e) = result { log_error(&format!("erro: {e}")); }
 }
