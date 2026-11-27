@@ -88,6 +88,8 @@ jobs:
           $p = Start-Process $exe -ArgumentList "--startup" -PassThru
           Start-Sleep 6
           Shot "1-fechado"
+          Start-Sleep 1
+          if (Test-Path "$env:APPDATA\Orbi\rust-inicio.log") { Copy-Item "$env:APPDATA\Orbi\rust-inicio.log" ci\inicio-6s.log }
           $w = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($w / 2)), 10
           Start-Sleep 2
@@ -145,6 +147,7 @@ jobs:
           Click (($w + 620) / 2 - 91) 22
           Start-Sleep 1
           Shot "13-configuracoes"
+          if (Test-Path "$env:APPDATA\Orbi\rust-inicio.log") { Copy-Item "$env:APPDATA\Orbi\rust-inicio.log" ci\inicio-depois.log }
           "janelas=$([W.Win]::List($p.Id))" | Out-File ci\resultado.txt -Append
           [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point 1000, 760
           Start-Sleep 1
@@ -258,6 +261,7 @@ jobs:
           Shot "14-atualizado"
           if (Test-Path "$env:APPDATA\Orbi\rust-erro.log") { Copy-Item "$env:APPDATA\Orbi\rust-erro.log" ci\erro.log }
           if (Test-Path "$env:APPDATA\Orbi\rust-diag.txt") { Copy-Item "$env:APPDATA\Orbi\rust-diag.txt" ci\diag.txt }
+          if (Test-Path "$env:APPDATA\Orbi\rust-inicio.log") { Copy-Item "$env:APPDATA\Orbi\rust-inicio.log" ci\inicio-compacto.log }
           if (Test-Path "$env:APPDATA\Orbi\rust-emit-erro.log") { Copy-Item "$env:APPDATA\Orbi\rust-emit-erro.log" ci\emit-erro.log }
           if (Test-Path "$env:APPDATA\Orbi\rust-agentes.log") { Copy-Item "$env:APPDATA\Orbi\rust-agentes.log" ci\agentes.log }
           if (-not $p.HasExited) { Stop-Process $p -Force }

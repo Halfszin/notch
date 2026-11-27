@@ -30,6 +30,16 @@ fn log_error(msg: &str) {
     let _ = std::fs::write(store::dir().join("rust-erro.log"), msg);
 }
 
+/// Diagnóstico da abertura: quanto tempo cada etapa levou (%AppData%\Orbi\rust-inicio.log).
+fn mark(step: &str) {
+    use std::io::Write;
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    let ms = START.get_or_init(std::time::Instant::now).elapsed().as_millis();
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(store::dir().join("rust-inicio.log")) {
+        let _ = writeln!(f, "{ms:>6} ms  {step}");
+    }
+}
+
 /// A tela chamou um botão/ação do notch ou das configurações (ex.: "notch.play_pause").
 #[tauri::command]
 fn ui_call(name: String, args: Vec<Value>) {
@@ -45,6 +55,7 @@ fn ui_set(key: String, value: Value) {
 /// Estado completo, pedido pela tela ao carregar.
 #[tauri::command]
 fn ui_state() -> Value {
+    mark("tela pediu o estado");
     compat::snapshot()
 }
 
@@ -68,7 +79,11 @@ fn main() {
         let _ = std::fs::write(store::dir().join("rust-letra.txt"), text);
         return;
     }
+    let _ = std::fs::create_dir_all(store::dir());
+    let _ = std::fs::remove_file(store::dir().join("rust-inicio.log"));
+    mark("abriu");
     if !settings::claim_instance() { return; }
+    mark("instância única");
     let result = tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![ui_call, ui_set, ui_state])
         .on_window_event(|window, event| {
@@ -80,23 +95,25 @@ fn main() {
             }
         })
         .setup(|app| {
+            mark("setup do tauri");
             compat::set_app(app.handle().clone());
             if let Some(w) = app.get_webview_window("notch") { let _ = w.set_ignore_cursor_events(true); }
             compat::start_core(|| {
                 let notch = Notch;
-                notch.init();
-                system::setup(&notch);
-                media::start(&notch);
-                pages::setup(&notch);
-                features::setup(&notch);
-                settings::setup(&notch);
+                notch.init(); mark("notch.init();");
+                system::setup(&notch); mark("system::setup(&notch);");
+                media::start(&notch); mark("media::start(&notch);");
+                pages::setup(&notch); mark("pages::setup(&notch);");
+                features::setup(&notch); mark("features::setup(&notch);");
+                settings::setup(&notch); mark("settings::setup(&notch);");
                 let p = settings::get();
                 // ORBI_SEM_AGENTES=1: abre sem o servidor dos agentes (diagnóstico do CI).
                 if std::env::var_os("ORBI_SEM_AGENTES").is_none() { agents::setup(&notch, p.agent_port, p.agent_token); }
-                settings::upgrade_agents();
-                settings::refresh_agents(&notch);
-                features::chat(&notch);
-                features::weather(&notch);
+                mark("agents::setup");
+                settings::upgrade_agents(); mark("settings::upgrade_agents();");
+                settings::refresh_agents(&notch); mark("settings::refresh_agents(&notch);");
+                features::chat(&notch); mark("features::chat(&notch);");
+                features::weather(&notch); mark("features::weather(&notch);");
             });
             Ok(())
         })
