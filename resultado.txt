@@ -1,0 +1,16 @@
+tamanho=21.8 MB
+com_album=44
+sem_album=43
+lrclib: status=200 OK tamanho=222974 começo=[{"id":7242265,"name":"Yellow","trackName":"Yellow","artistName":"Coldplay","albumName":"Q Awards: The Album","duration"
+icone_do_explorer=48x48 visiveis=1950
+som_do_windows=true
+pwsh_lrclib=200 222970
+portas_4783x_antes=
+vivo=True
+atualizou=True
+segunda_copia_fechou=True
+agente_codigo_errado=403
+agente_pretooluse={} http=200
+agente_resposta={"hookSpecificOutput":{"decision":{"behavior":"allow"},"hookEventName":"PermissionRequest"}}
+config_depois_de_arrastar={"edge":1,"edge_pos":0.5208333}
+compacto_vivo=True
