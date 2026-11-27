@@ -6,34 +6,174 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- O notch: fechado (anel da bateria + hora) e aberto (cabeçalho + conteúdo). -->
+  <!-- O notch: mesmo desenho do Orbi em Slint (fechado, aviso e aberto com as páginas). -->
   <div id="pill">
-    <div id="closed">
-      <svg id="ring" class="ring" viewBox="0 0 18 18" aria-hidden="true">
-        <circle class="track" cx="9" cy="9" r="7.75"/>
-        <circle class="arc" cx="9" cy="9" r="7.75" pathLength="100"/>
-      </svg>
-      <span id="clock-closed">--:--</span>
+    <!-- fechado no topo: anel + barrinhas + hora -->
+    <div id="closed-top" class="closed">
+      <span class="rings"></span>
+      <span id="barsbox"><span class="bars" id="closed-bars"></span></span>
+      <span class="ctext" id="closed-text"></span>
     </div>
+    <!-- fechado nas laterais: em pé -->
+    <div id="closed-side" class="closed">
+      <span class="rings"></span>
+      <span class="bars" id="side-bars"></span>
+      <span class="ctext" id="side-text"></span>
+    </div>
+
+    <!-- aviso rápido -->
+    <div id="toast"><span id="toast-icon"></span><span id="toast-text"></span></div>
+
+    <!-- aberto -->
     <div id="open">
       <header>
-        <div class="title"><b>Orbi</b><span>Tauri</span></div>
-        <div class="when">
-          <svg class="ring small" viewBox="0 0 18 18" aria-hidden="true">
-            <circle class="track" cx="9" cy="9" r="7.75"/>
-            <circle class="arc" cx="9" cy="9" r="7.75" pathLength="100"/>
-          </svg>
-          <span id="date">—</span>
-          <b id="clock-open">--:--</b>
+        <div id="title"></div>
+        <div id="when">
+          <span class="rings"></span>
+          <span id="weather"><span id="weather-glyph"></span><span id="weather-text"></span></span>
+          <span id="date"></span>
+          <b id="clock"></b>
         </div>
-        <div class="spacer"></div>
+        <div id="tools">
+          <span class="bars anim" id="head-bars"><i></i><i></i><i></i><i></i></span>
+          <button class="tool" id="chat-btn" title="Claude"><svg viewBox="0 0 256 257"><use href="#claude"/></svg></button>
+          <button class="tool icon" id="game-btn" title="Modo jogo">&#xE7FC;</button>
+          <button class="tool icon" id="gear-btn" title="Configurações">&#xE713;</button>
+          <button class="tool icon" id="quit-btn" title="Fechar">&#xE711;</button>
+        </div>
       </header>
-      <main>
-        <p class="hello">Base nova do Orbi, com a tela em HTML.</p>
-        <p class="sub">As páginas (música, tarefas, chat…) chegam nas próximas etapas.</p>
-      </main>
+
+      <section id="content">
+        <!-- 0: música -->
+        <div class="page" id="p0">
+          <div class="avatar" id="avatar"></div>
+          <div id="player">
+            <div class="song-row">
+              <div id="cover"><img alt=""><span class="icon">&#xE8D6;</span></div>
+              <div class="song-text"><b id="song"></b><span id="artist"></span></div>
+            </div>
+            <div class="progress-row">
+              <span id="elapsed"></span>
+              <div class="track"><div id="progress"></div></div>
+              <span id="remaining"></span>
+            </div>
+            <div class="controls">
+              <div class="side l"><button class="ibtn icon" id="lyr-btn">&#xE8BD;</button></div>
+              <button class="ibtn icon" id="prev-btn">&#xE892;</button>
+              <button class="ibtn icon big" id="play-btn"></button>
+              <button class="ibtn icon" id="next-btn">&#xE893;</button>
+              <div class="side r">
+                <div id="volume"><span class="icon" id="vol-icon"></span><i class="vtrack"></i><i class="vfill"></i><i class="vknob"></i></div>
+              </div>
+            </div>
+          </div>
+          <div id="lyrics">
+            <span class="sep"></span>
+            <div class="lines"><span id="ly-prev"></span><b id="ly-now"></b><span id="ly-next"></span><span id="ly-next2"></span></div>
+          </div>
+        </div>
+
+        <!-- 1: tarefas -->
+        <div class="page" id="p1">
+          <div class="tasks-left">
+            <div id="tasks-count"></div>
+            <div class="muted13">feitas hoje</div>
+            <div style="height:8px"></div>
+            <div id="task-buttons" class="row8">
+              <button class="pill" id="task-add"><span class="icon">&#xE710;</span>Adicionar</button>
+              <button class="pill" id="task-clear"><span class="icon">&#xE74D;</span>Limpar</button>
+            </div>
+            <input id="task-input" class="line" placeholder="Nova tarefa… (Enter salva)">
+          </div>
+          <div class="scroll" id="task-list"></div>
+        </div>
+
+        <!-- 2: foco -->
+        <div class="page" id="p2">
+          <div id="focus-text"></div>
+          <div class="row8 center">
+            <button class="pill primary" id="focus-toggle"></button>
+            <button class="pill" id="focus-reset"><span class="icon">&#xE72C;</span>Zerar</button>
+          </div>
+          <div class="row6 center" id="presets"></div>
+        </div>
+
+        <!-- 3: calendário -->
+        <div class="page" id="p3">
+          <div class="cal-head"><b id="month-name"></b><button class="ibtn icon small" id="month-prev">&#xE76B;</button><button class="ibtn icon small" id="month-next">&#xE76C;</button></div>
+          <div id="cal"></div>
+        </div>
+
+        <!-- 4: notas -->
+        <div class="page" id="p4">
+          <textarea id="notes" placeholder="Anote algo rápido… (salva sozinho)"></textarea>
+        </div>
+
+        <!-- 5: copiados -->
+        <div class="page" id="p5">
+          <div class="clip-head"><span id="clip-hint"></span><span id="clip-clear">Limpar</span></div>
+          <div class="scroll" id="clip-list"></div>
+        </div>
+
+        <!-- 6: sistema -->
+        <div class="page" id="p6">
+          <div id="gauges"></div>
+          <div class="audio-dev"><span class="icon">&#xE7F6;</span><span id="audio-device"></span></div>
+        </div>
+
+        <!-- 7: atalhos -->
+        <div class="page scroll" id="p7">
+          <div id="sc-add" class="row8">
+            <button class="pill" id="sc-file"><span class="icon">&#xE7AC;</span>App ou arquivo</button>
+            <button class="pill" id="sc-folder"><span class="icon">&#xE8B7;</span>Pasta</button>
+            <input id="sc-site" class="line" placeholder="site (ex.: youtube.com)">
+            <button class="ibtn icon small" id="sc-cancel">&#xE711;</button>
+          </div>
+          <div id="sc-grid"></div>
+        </div>
+
+        <!-- 8: agentes -->
+        <div class="page" id="p8">
+          <div id="perm">
+            <div class="perm-head"><span class="icon">&#xE72E;</span><b id="perm-what"></b><span id="perm-project"></span></div>
+            <div id="perm-code"></div>
+            <div class="row8 end">
+              <button class="pill" data-perm="deny"><span class="icon">&#xE711;</span>Negar</button>
+              <button class="pill" data-perm="always"><span class="icon">&#xE8FB;</span>Sempre</button>
+              <button class="pill primary" data-perm="allow"><span class="icon">&#xE73E;</span>Permitir</button>
+            </div>
+          </div>
+          <div id="agents-empty"><b></b><span></span></div>
+          <div class="scroll" id="agent-list"></div>
+          <div id="plan"></div>
+        </div>
+
+        <!-- chat com o Claude -->
+        <div class="page" id="chat">
+          <div class="scroll" id="chat-list"></div>
+          <div id="chat-box">
+            <input id="chat-input" placeholder="Como posso ajudar?">
+            <button id="chat-trash" title="Limpar a conversa"><img src="icons/lixeira.png" alt=""></button>
+            <button id="chat-send" title="Enviar"><img src="icons/enviar.png" alt=""></button>
+          </div>
+        </div>
+      </section>
+
+      <div id="dots"></div>
     </div>
+
+    <button class="arrow" id="arrow-l"><svg viewBox="0 0 24 24"><path d="M15 6L10.273 10.727A1.8 1.8 0 0 0 10.273 13.273L15 18"/></svg></button>
+    <button class="arrow" id="arrow-r"><svg viewBox="0 0 24 24"><path d="M9 6L13.727 10.727A1.8 1.8 0 0 1 13.727 13.273L9 18"/></svg></button>
   </div>
+
+  <!-- Logo do Claude (vetor enviado pelo dono) e o degradê das setas "de vidro". -->
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity=".55"/></linearGradient>
+      <path id="claude" fill="#D97757" d="m50.228 170.321 50.357-28.257.843-2.463-.843-1.361h-2.462l-8.426-.518-28.775-.778-24.952-1.037-24.175-1.296-6.092-1.297L0 125.796l.583-3.759 5.12-3.434 7.324.648 16.202 1.101 24.304 1.685 17.629 1.037 26.118 2.722h4.148l.583-1.685-1.426-1.037-1.101-1.037-25.147-17.045-27.22-18.017-14.258-10.37-7.713-5.25-3.888-4.925-1.685-10.758 7-7.713 9.397.649 2.398.648 9.527 7.323 20.35 15.75L94.817 91.9l3.889 3.24 1.555-1.102.195-.777-1.75-2.917-14.453-26.118-15.425-26.572-6.87-11.018-1.814-6.61c-.648-2.723-1.102-4.991-1.102-7.778l7.972-10.823L71.42 0 82.05 1.426l4.472 3.888 6.61 15.101 10.694 23.786 16.591 32.34 4.861 9.592 2.592 8.879.973 2.722h1.685v-1.556l1.36-18.211 2.528-22.36 2.463-28.776.843-8.1 4.018-9.722 7.971-5.25 6.222 2.981 5.12 7.324-.713 4.73-3.046 19.768-5.962 30.98-3.889 20.739h2.268l2.593-2.593 10.499-13.934 17.628-22.036 7.778-8.749 9.073-9.657 5.833-4.601h11.018l8.1 12.055-3.628 12.443-11.342 14.388-9.398 12.184-13.48 18.147-8.426 14.518.778 1.166 2.01-.194 30.46-6.481 16.462-2.982 19.637-3.37 8.88 4.148.971 4.213-3.5 8.62-20.998 5.184-24.628 4.926-36.682 8.685-.454.324.519.648 16.526 1.555 7.065.389h17.304l32.21 2.398 8.426 5.574 5.055 6.805-.843 5.184-12.962 6.611-17.498-4.148-40.83-9.721-14-3.5h-1.944v1.167l11.666 11.406 21.387 19.314 26.767 24.887 1.36 6.157-3.434 4.86-3.63-.518-23.526-17.693-9.073-7.972-20.545-17.304h-1.36v1.814l4.73 6.935 25.017 37.59 1.296 11.536-1.814 3.76-6.481 2.268-7.13-1.297-14.647-20.544-15.1-23.138-12.185-20.739-1.49.843-7.194 77.448-3.37 3.953-7.778 2.981-6.48-4.925-3.436-7.972 3.435-15.749 4.148-20.544 3.37-16.333 3.046-20.285 1.815-6.74-.13-.454-1.49.194-15.295 20.999-23.267 31.433-18.406 19.702-4.407 1.75-7.648-3.954.713-7.064 4.277-6.286 25.47-32.405 15.36-20.092 9.917-11.6-.065-1.686h-.583L44.07 198.125l-12.055 1.555-5.185-4.86.648-7.972 2.463-2.593 20.35-13.999-.064.065Z"/>
+    </defs>
+  </svg>
+  <script src="avatar.js"></script>
   <script src="main.js"></script>
 </body>
 </html>

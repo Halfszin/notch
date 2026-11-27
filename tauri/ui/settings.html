@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Orbi</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <!-- Configurações no visual do Orbi em C#: menu à esquerda, cartões com chave à direita. -->
+  <nav>
+    <div class="brand"><img src="orbi.png" alt=""><b>Orbi</b></div>
+    <div class="label nav-label">CONFIGURAÇÕES</div>
+    <div id="nav"></div>
+    <div class="grow"></div>
+    <div class="status"><i></i>Ativo · mouse no notch</div>
+  </nav>
+
+  <main><div id="scroll">
+    <div class="hero">
+      <i style="left:12%;top:70%;width:2px;height:2px"></i><i style="left:30%;top:25%;width:1.5px;height:1.5px"></i>
+      <i style="left:46%;top:62%;width:2px;height:2px"></i><i style="left:58%;top:18%;width:1.5px;height:1.5px"></i>
+      <i style="left:70%;top:48%;width:2.5px;height:2.5px"></i><i style="left:86%;top:22%;width:1.5px;height:1.5px"></i>
+      <i style="left:22%;top:40%;width:1px;height:1px"></i>
+      <h1>Configurações</h1>
+      <div class="avatar" id="avatar"></div>
+    </div>
+
+    <div class="label sec" id="s0">NOTCH</div>
+    <div class="card">
+      <div class="row"><div class="txt"><b>Onde o notch fica</b><span>Você também pode segurar o fundo do notch aberto e arrastar pela borda da tela.</span></div>
+        <div class="seg" data-seg="edge"><button data-v="0">Topo</button><button data-v="1">Esquerda</button><button data-v="2">Direita</button></div></div>
+      <div class="row"><div class="txt"><b>Tamanho do notch aberto</b><span>Grande deixa mais espaço para as listas, a letra e o calendário.</span></div>
+        <div class="seg" data-seg="compact"><button data-v="false">Grande</button><button data-v="true">Compacto</button></div></div>
+      <div class="row"><div class="txt"><b>Iniciar com o Windows</b><span>O notch aparece sozinho quando você liga o PC, sem abrir esta tela.</span></div>
+        <button class="toggle" data-key="start_with_windows"></button></div>
+    </div>
+
+    <div class="label sec" id="s1">PÁGINAS DO NOTCH</div>
+    <p class="hint">Escolha o que aparece e em que ordem: a primeira é a 1ª bolinha, a segunda é a 2ª…</p>
+    <div class="card" id="pages"></div>
+
+    <div class="label sec" id="s2">APARÊNCIA</div>
+    <div class="card">
+      <div class="row"><div class="txt"><b>Gradiente com a cor da capa</b><span>Na página da música, o fundo do notch pega a cor do álbum.</span></div><button class="toggle" data-key="gradient"></button></div>
+      <div class="row"><div class="txt"><b>Letras das músicas</b><span>Mostra a letra sincronizada ao lado do player, quando a música tem.</span></div><button class="toggle" data-key="lyrics"></button></div>
+    </div>
+
+    <div class="label sec" id="s3">NOTIFICAÇÕES</div>
+    <div class="card">
+      <div class="row"><div class="txt"><b>Bateria e carregador</b><span>Avisa ao ligar ou tirar da tomada e quando a bateria fica fraca.</span></div><button class="toggle" data-key="battery_alerts"></button></div>
+      <div class="row"><div class="txt"><b>Saída de som</b><span>Avisa quando o som muda para o fone ou para as caixas.</span></div><button class="toggle" data-key="audio_alerts"></button></div>
+      <div class="row"><div class="txt"><b>WhatsApp, Discord e email no notch</b><span>Mostra as mensagens que chegam, lendo as notificações do próprio Windows. Nada sai do seu PC.</span></div><button class="toggle" data-key="app_notifications"></button></div>
+      <div class="row"><div class="txt"><b>Sons do Orbi</b><span>Mensagens, lembretes e fim do foco. Para trocar, ponha .wav na pasta sons (aviso, lembrete, timer).</span></div><button class="toggle" data-key="sounds"></button></div>
+      <div class="row"><div class="txt"><b>Lembretes das tarefas</b><span>Tarefas com hora (ex.: "ligar pro banco às 15h") avisam no notch.</span></div><button class="toggle" data-key="reminders"></button></div>
+    </div>
+
+    <div class="label sec" id="s4">CLIMA</div>
+    <div class="card">
+      <div class="row"><div class="txt"><b>Cidade</b><span id="city-status"></span></div>
+        <div class="ctl"><input id="city" placeholder="ex.: Campinas"><button class="btn" id="city-save">Salvar</button></div></div>
+    </div>
+
+    <div class="label sec" id="s5">INTELIGÊNCIA ARTIFICIAL</div>
+    <div class="card">
+      <div class="row"><div class="txt"><b>Chave da API do Claude</b><span id="api-key-status"></span></div>
+        <div class="ctl"><input id="api-key" type="password" placeholder="sk-ant-..."><button class="btn" id="key-save">Salvar</button><button class="btn" id="key-remove">Remover</button></div></div>
+    </div>
+
+    <div class="label sec" id="s6">AGENTES (CLAUDE CODE)</div>
+    <div class="card">
+      <div class="row"><div class="txt"><b>Sessões, permissões e limites do plano no notch</b><span id="agents-status"></span></div>
+        <div class="ctl"><button class="btn" id="agents-off">Desconectar</button><button class="btn primary" id="agents-on">Conectar</button></div></div>
+    </div>
+
+    <div class="label sec" id="s7">ATUALIZAÇÕES</div>
+    <div class="card">
+      <div class="row"><div class="txt"><b>Atualizar sozinho</b><span>Procura versão nova ao abrir e a cada 4 horas e baixa sozinho.</span></div><button class="toggle" data-key="auto_update"></button></div>
+      <div class="row"><div class="txt"><b id="version"></b><span id="update-status"></span></div>
+        <div class="ctl"><button class="btn" id="check-update">Verificar agora</button><button class="btn primary" id="restart-update">Reiniciar e atualizar</button></div></div>
+    </div>
+
+    <div class="label sec" id="s8">APP</div>
+    <div class="card">
+      <div class="row"><div class="txt"><b>Pasta dos dados</b><span>Tarefas, notas e atalhos (atalhos.json) ficam aqui, os mesmos do Orbi em C#.</span></div><button class="btn" id="open-folder">Abrir pasta</button></div>
+      <div class="row"><div class="txt"><b>Fechar o Orbi</b><span>O notch some até você abrir o app de novo. Fechar esta janela não fecha o notch.</span></div><button class="btn" id="quit">Sair</button></div>
+    </div>
+  </div></main>
+  <script src="avatar.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

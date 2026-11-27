@@ -1,78 +1,314 @@
-/* Medidas e tempos iguais aos do Orbi em Slint: fechado 120 x 30, aberto 620 x 262. */
-:root {
-  --closed-w: 120px; --closed-h: 30px;
-  --open-w: 620px;   --open-h: 262px;
-  --green: #30D158; --yellow: #FFD60A; --red: #FF453A; --gray: #8E8E93;
-}
+/* Notch do Orbi: medidas, cores e tempos copiados do notch.slint. */
+:root { --green: #30D158; --gray: #8E8E93; --claude: #D97757; }
 
 html, body {
-  margin: 0;
-  width: 100%; height: 100%;
-  background: transparent;
-  overflow: hidden;
-  font-family: "Segoe UI", system-ui, sans-serif;
-  color: #fff;
-  user-select: none;
-  cursor: default;
+  margin: 0; width: 100%; height: 100%;
+  background: transparent; overflow: hidden;
+  font-family: "Segoe UI", system-ui, sans-serif; color: #fff;
+  user-select: none; cursor: default;
 }
+* { box-sizing: border-box; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.icon { font-family: "Segoe MDL2 Assets"; font-style: normal; }
+.scroll { overflow-y: auto; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
 
+/* ---------- a pílula ---------- */
 #pill {
-  position: absolute;
-  top: 0; left: 50%;
-  transform: translateX(-50%);
-  width: var(--closed-w);
-  height: var(--closed-h);
-  background: #000;
-  border-radius: 0 0 28px 28px;
-  overflow: hidden;
+  position: absolute; background: #000; overflow: hidden;
+  width: 120px; height: 30px;
   /* Recolher: direto, sem passar do ponto. */
   transition: width 300ms ease-out, height 300ms ease-out, border-radius 300ms;
 }
-body.open #pill {
-  width: var(--open-w);
-  height: var(--open-h);
-  border-radius: 0 0 30px 30px;
-  /* Abrir: com o "pulinho" (passa um pouco e volta), como no Orbi de hoje. */
-  transition: width 420ms cubic-bezier(.34, 1.56, .64, 1), height 420ms cubic-bezier(.34, 1.56, .64, 1), border-radius 300ms;
-}
+/* Abrir (notch ou aviso): com o "pulinho". */
+#pill.grow { transition: width 420ms cubic-bezier(.34, 1.56, .64, 1), height 420ms cubic-bezier(.34, 1.56, .64, 1), border-radius 300ms; }
+body.e0 #pill { top: 0; left: 50%; transform: translateX(-50%) scale(var(--beat, 1)); transform-origin: top center; }
+body.e1 #pill { left: 0; top: 50%; transform: translateY(-50%) scale(var(--beat, 1)); transform-origin: left center; }
+body.e2 #pill { right: 0; top: 50%; transform: translateY(-50%) scale(var(--beat, 1)); transform-origin: right center; }
 
-/* Fechado: some na hora ao abrir; volta só depois do notch encolher. */
-#closed {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  font-size: 13px; font-weight: 600;
-  opacity: 1;
-  transition: opacity 150ms 200ms;
+/* ---------- fechado ---------- */
+.closed {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  opacity: 1; transition: opacity 150ms 200ms; pointer-events: none;
 }
-body.open #closed { opacity: 0; transition: opacity 150ms; }
+body.hide-closed .closed { opacity: 0; transition: opacity 150ms; }
+body.e0 #closed-side, body:not(.e0) #closed-top { display: none; }
+.ctext { font-size: 13px; font-weight: 600; white-space: nowrap; }
+body.focusing .ctext { color: #FF9F0A; }
+#closed-top { padding: 6px 0; }
+#closed-top .ctext { line-height: 18px; }
+#barsbox { width: 6px; height: 18px; overflow: hidden; position: relative; transition: width 300ms ease-out; flex: none; }
+body.playing #barsbox { width: 37px; }
+#closed-bars { position: absolute; left: 7px; width: 23px; height: 18px; opacity: 0; transition: opacity 200ms; }
+body.playing #closed-bars { opacity: 1; }
+#closed-side { flex-direction: column; gap: 6px; }
+#closed-side .rings { flex-direction: column; gap: 6px; }
+#side-bars { height: 16px; }
+body:not(.playing) #side-bars { display: none; }
+#closed-side .ctext { text-align: center; white-space: pre; }
 
-/* Aberto: aparece depois do notch crescer; some antes dele encolher. */
+.rings { display: flex; align-items: center; gap: 8px; }
+.rings:empty { display: none; }
+
+/* Barrinhas de áudio: altura vem do Rust (bands) ou da animação (topo aberto). */
+.bars { display: flex; align-items: center; gap: 2px; }
+.bars i { display: block; width: 3px; height: 3px; border-radius: 1.5px; background: var(--green); }
+.bars.anim i { background: #fff; height: 4px; animation: bar 900ms ease-in-out infinite alternate; }
+.bars.anim i:nth-child(2) { animation-delay: -300ms; }
+.bars.anim i:nth-child(3) { animation-delay: -600ms; }
+.bars.anim i:nth-child(4) { animation-delay: -150ms; }
+@keyframes bar { from { height: 4px; } to { height: 14px; } }
+body:not(.playing) #head-bars { display: none; }
+
+/* Anel (bateria/temperatura): pontas redondas, começa no topo. */
+.ring { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+.ring svg { position: absolute; inset: 0; transform: rotate(-90deg); overflow: visible; }
+.ring circle { fill: none; }
+.ring .track { stroke: #2E2E31; }
+.ring .arc { stroke-linecap: round; }
+.ring .bolt { font-family: "Segoe MDL2 Assets"; font-size: 7px; position: relative; }
+.ring .txt { position: relative; font-size: 16px; font-weight: 600; }
+
+/* ---------- aviso ---------- */
+#toast {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 16px;
+  opacity: 0; transition: opacity 90ms; pointer-events: none;
+}
+body.toasting:not(.open) #toast { opacity: 1; transition: opacity 160ms 120ms; }
+#toast-icon { display: flex; align-items: center; }
+#toast-icon img { width: 22px; height: 22px; object-fit: contain; }
+#toast-icon .glyph { font-family: "Segoe MDL2 Assets"; font-size: 14px; }
+#toast-icon .badge { width: 22px; height: 22px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-family: "Segoe MDL2 Assets"; font-size: 12px; color: #fff; }
+#toast-text { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- aberto ---------- */
 #open {
-  position: absolute; top: 0; left: 50%;
-  transform: translateX(-50%);
-  width: var(--open-w); height: var(--open-h);
-  box-sizing: border-box;
-  padding: 10px 46px 8px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 100ms;
+  position: absolute; top: 0; left: 0; width: 620px; height: 262px;
+  display: flex; flex-direction: column; gap: 6px; padding: 10px 46px 8px;
+  opacity: 0; pointer-events: none; transition: opacity 100ms;
 }
+body.compact #open { width: 544px; height: 232px; }
 body.open #open { opacity: 1; pointer-events: auto; transition: opacity 220ms 90ms; }
 
-header { display: flex; align-items: center; height: 24px; gap: 8px; }
-header .title { width: 150px; font-size: 14px; display: flex; gap: 4px; }
-header .title span { color: var(--green); font-weight: 700; }
-header .when { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12.5px; }
-header .spacer { width: 150px; }
+header { display: flex; align-items: center; height: 24px; gap: 8px; flex: none; }
+#title { width: 150px; display: flex; gap: 4px; font-size: 14px; font-weight: 700; white-space: nowrap; }
+#title .sub { color: var(--green); }
+#title.claude { color: var(--claude); }
+#title.music { gap: 10px; }
+#title.music span { color: #6E6E73; cursor: pointer; }
+#title.music span:hover { color: #AEAEB2; }
+#title.music span.on { color: var(--green); }
+#when { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12.5px; white-space: nowrap; }
+#weather { display: flex; gap: 4px; align-items: center; }
+#weather-glyph { font-family: "Segoe UI Symbol"; font-size: 13px; }
+#tools { width: 150px; display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
+.tool { width: 26px; height: 24px; border-radius: 12px; color: #AEAEB2; display: flex; align-items: center; justify-content: center; flex: none; }
+.tool:hover { background: #FFFFFF18; }
+#chat-btn svg { width: 15px; height: 15px; }
+body.chat #chat-btn { background: #D9775733; }
+#game-btn { font-size: 14px; }
+body.game #game-btn { color: var(--green); }
+#gear-btn { font-size: 13px; }
+#quit-btn { font-size: 11px; }
 
-main { height: calc(100% - 24px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
-main .hello { margin: 0; font-size: 16px; font-weight: 600; }
-main .sub { margin: 0; font-size: 12px; color: var(--gray); }
+#content { flex: 1; position: relative; min-height: 0; }
+.page { position: absolute; inset: 0; display: none; }
+.page.show { display: flex; }
 
-/* Anel da bateria (pontas redondas, começa no topo). Sem bateria: escondido. */
-.ring { width: 18px; height: 18px; transform: rotate(-90deg); }
-.ring.small { width: 16px; height: 16px; }
-.ring circle { fill: none; stroke-width: 2.5; }
-.ring .track { stroke: #2E2E31; }
-.ring .arc { stroke: var(--ring, var(--green)); stroke-linecap: round; stroke-dasharray: var(--pct, 100) 100; transition: stroke-dasharray 400ms; }
-body.no-battery .ring { display: none; }
+.ibtn { width: 34px; height: 30px; border-radius: 15px; font-size: 15px; color: #DDDDDD; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.ibtn:hover { background: #FFFFFF18; }
+.ibtn.big { font-size: 19px; color: #fff; }
+.ibtn.small { font-size: 11px; }
+.pill { height: 30px; border-radius: 15px; padding: 0 14px 0 12px; display: inline-flex; align-items: center; gap: 6px; background: #1E1E22; font-size: 12.5px; font-weight: 600; white-space: nowrap; flex: none; }
+.pill:hover { background: #2C2C31; }
+.pill .icon { font-size: 12px; }
+.pill.primary { background: #fff; color: #000; }
+.pill.primary:hover { background: #E6E6E6; }
+.row8 { display: flex; gap: 8px; align-items: center; }
+.row6 { display: flex; gap: 6px; align-items: center; }
+.center { justify-content: center; }
+.end { justify-content: flex-end; }
+.muted13 { color: var(--gray); font-size: 13px; }
+input.line {
+  height: 32px; border-radius: 8px; border: 1px solid #FFFFFF1F; background: #1C1C20; color: #fff;
+  padding: 0 10px; font: 13px "Segoe UI", sans-serif; outline: none; min-width: 0;
+}
+input.line:focus { border-color: #FFFFFF55; }
+
+/* 0: música */
+#p0 { gap: 16px; }
+.avatar { position: relative; width: 140px; flex: none; }
+body.compact .avatar { width: 96px; }
+.avatar .body { position: absolute; border-radius: 50%; background: #fff; box-shadow: 0 0 28px #FFE2B855; }
+.avatar .eye { position: absolute; border-radius: 999px; background: #111316; }
+.avatar svg { position: absolute; overflow: visible; }
+#player { width: 360px; display: flex; flex-direction: column; justify-content: center; gap: 10px; flex: none; }
+body.compact #player { width: 340px; }
+body.with-lyrics #player { width: 260px; }
+body.with-lyrics #avatar { display: none; }
+.song-row { display: flex; gap: 12px; align-items: center; }
+#cover { width: 64px; height: 64px; border-radius: 12px; overflow: hidden; background: #222226; display: flex; align-items: center; justify-content: center; flex: none; }
+#cover img { width: 100%; height: 100%; object-fit: cover; display: none; }
+#cover .icon { font-size: 22px; color: #777; }
+body.has-cover #cover img { display: block; }
+body.has-cover #cover .icon { display: none; }
+.song-text { display: flex; flex-direction: column; min-width: 0; }
+#song { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#artist { font-size: 13px; color: #FFFFFFAA; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.progress-row { display: flex; align-items: center; gap: 10px; font-size: 11px; color: #FFFFFFCC; }
+#elapsed { width: 36px; flex: none; }
+#remaining { width: 40px; text-align: right; flex: none; }
+.progress-row .track { flex: 1; height: 4px; border-radius: 2px; background: #FFFFFF33; overflow: hidden; }
+#progress { height: 100%; border-radius: 2px; background: #fff; width: 0; }
+.controls { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.controls .side { width: 100px; display: flex; flex: none; }
+body.with-lyrics .controls .side { width: 60px; }
+.controls .side.l { justify-content: flex-end; }
+body:not(.has-lyrics) #lyr-btn { display: none; }
+#lyr-btn { font-size: 14px; color: #FFFFFF88; }
+body.lyrics-on #lyr-btn { color: #fff; }
+#volume { position: relative; width: 34px; height: 30px; border-radius: 15px; overflow: hidden; flex: none; cursor: pointer; transition: width 200ms ease-out, background 200ms; }
+#volume.expanded { width: 110px; background: #FFFFFF18; }
+#vol-icon { position: absolute; left: 0; width: 34px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #DDDDDD; }
+#volume i { position: absolute; display: block; opacity: 0; }
+#volume.expanded i { opacity: 1; }
+.vtrack { left: 30px; top: 13px; width: 68px; height: 4px; border-radius: 2px; background: #FFFFFF33; }
+.vfill { left: 30px; top: 13px; height: 4px; border-radius: 2px; background: #fff; }
+.vknob { top: 9px; width: 12px; height: 12px; border-radius: 6px; background: #fff; }
+#lyrics { display: none; gap: 16px; flex: 1; min-width: 0; }
+body.with-lyrics #lyrics { display: flex; }
+#lyrics .sep { width: 1px; background: #FFFFFF22; flex: none; }
+#lyrics .lines { display: flex; flex-direction: column; justify-content: center; gap: 8px; min-width: 0; flex: 1; }
+#lyrics span { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#ly-prev { color: #FFFFFF55; } #ly-next { color: #FFFFFF77; } #ly-next2 { color: #FFFFFF44; }
+#ly-now { font-size: 15px; font-weight: 700; }
+
+/* 1: tarefas */
+#p1 { gap: 18px; }
+.tasks-left { width: 210px; display: flex; flex-direction: column; justify-content: center; gap: 4px; flex: none; }
+#tasks-count { font-size: 42px; font-weight: 800; line-height: 1.2; }
+#task-input { display: none; }
+body.adding #task-input { display: block; }
+body.adding #task-buttons { display: none; }
+#task-list { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.task { height: 36px; border-radius: 10px; background: #1C1C20; display: flex; align-items: center; gap: 10px; padding: 0 10px; cursor: pointer; flex: none; }
+.task:hover { background: #26262B; }
+.task.done { background: #17331F; }
+.task .check { width: 20px; height: 20px; border-radius: 10px; border: 1.5px solid #8E8E93; display: flex; align-items: center; justify-content: center; font-family: "Segoe MDL2 Assets"; font-size: 10px; color: #000; flex: none; }
+.task.done .check { background: var(--green); border: 0; }
+.task .t { font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task.done .t { color: #FFFFFF77; }
+.task .due { color: #FF9F0A; font-size: 11px; }
+.empty { color: var(--gray); font-size: 13px; }
+
+/* 2: foco */
+#p2 { flex-direction: column; justify-content: center; gap: 10px; }
+#focus-text { font-size: 56px; font-weight: 300; text-align: center; line-height: 1.2; }
+body.focusing #focus-text { color: #FF9F0A; }
+.preset { width: 44px; height: 24px; border-radius: 12px; font-size: 12px; font-weight: 600; color: var(--gray); }
+.preset.on { background: #2C2C31; color: #fff; }
+
+/* 3: calendário */
+#p3 { flex-direction: column; gap: 4px; }
+body.compact #p3 { gap: 1px; }
+.cal-head { display: flex; align-items: center; height: 26px; }
+body.compact .cal-head { height: 22px; }
+.cal-head b { flex: 1; font-size: 14px; }
+#cal { display: grid; grid-template-columns: repeat(7, 1fr); grid-template-rows: 18px repeat(6, 24px); }
+body.compact #cal { grid-template-rows: 14px repeat(6, 18px); }
+#cal span { display: flex; align-items: center; justify-content: center; font-size: 12px; }
+#cal .wd { color: var(--gray); font-size: 11px; }
+#cal .out { color: #48484A; }
+#cal .today b { background: #fff; color: #000; width: 32px; height: calc(100% - 4px); border-radius: 999px; display: flex; align-items: center; justify-content: center; }
+
+/* 4: notas */
+#notes { flex: 1; border-radius: 14px; background: #141416; border: 0; outline: none; resize: none; color: #fff; padding: 12px; font: 13px "Segoe UI", sans-serif; scrollbar-width: none; }
+#notes::placeholder, input::placeholder { color: #8E8A86; }
+
+/* 5: copiados */
+#p5 { flex-direction: column; gap: 6px; }
+.clip-head { display: flex; height: 18px; font-size: 12px; color: var(--gray); flex: none; }
+#clip-hint { flex: 1; }
+#clip-clear { cursor: pointer; }
+#clip-list { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.clip { height: 30px; border-radius: 8px; background: #1C1C20; padding: 0 10px; font-size: 12.5px; line-height: 30px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; flex: none; }
+.clip:hover { background: #26262B; }
+
+/* 6: sistema */
+#p6 { flex-direction: column; justify-content: center; gap: 10px; }
+#gauges { display: flex; justify-content: space-around; }
+.gauge { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.gauge .n { font-size: 12px; }
+.gauge .d { font-size: 10.5px; color: var(--gray); }
+.audio-dev { display: flex; justify-content: center; align-items: center; gap: 6px; color: var(--gray); font-size: 11.5px; }
+.audio-dev .icon { font-size: 12px; }
+
+/* 7: atalhos */
+#p7 { flex-direction: column; gap: 8px; }
+#sc-add { height: 32px; display: none; flex: none; }
+body.sc-adding #sc-add { display: flex; }
+#sc-site { flex: 1; font-size: 12px; }
+#sc-cancel { color: var(--gray); }
+#sc-grid { display: grid; grid-template-columns: repeat(6, 74px); gap: 8px; }
+.sc { width: 74px; height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; cursor: pointer; }
+.sc .box { width: 42px; height: 42px; border-radius: 12px; background: #1E1E22; display: flex; align-items: center; justify-content: center; font-family: "Segoe MDL2 Assets"; font-size: 18px; }
+.sc:hover .box { background: #2C2C31; }
+.sc .nm { font-size: 11px; color: #AEAEB2; max-width: 74px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 8: agentes */
+#p8 { flex-direction: column; gap: 8px; }
+#perm { display: none; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: #1C1C20; }
+body.perm #perm { display: flex; }
+.perm-head { display: flex; align-items: center; gap: 8px; }
+.perm-head .icon { color: #FF9F0A; font-size: 14px; }
+#perm-what { flex: 1; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#perm-project { font-size: 12px; color: var(--gray); }
+#perm-code { min-height: 44px; max-height: 64px; overflow: hidden; border-radius: 8px; background: #0E0E10; padding: 6px 10px; font: 12px Consolas, monospace; color: #E5E5EA; display: flex; align-items: center; white-space: pre-wrap; word-break: break-word; }
+#agents-empty { flex: 1; display: none; flex-direction: column; justify-content: center; align-items: center; gap: 4px; text-align: center; }
+#agents-empty b { font-size: 14px; font-weight: 600; }
+#agents-empty span { font-size: 12px; color: var(--gray); }
+#agent-list { flex: 1; display: none; flex-direction: column; gap: 4px; }
+body:not(.perm).no-agents #agents-empty { display: flex; }
+body:not(.perm):not(.no-agents) #agent-list { display: flex; }
+.agent { height: 32px; border-radius: 8px; background: #1C1C20; display: flex; align-items: center; gap: 8px; padding: 0 10px; flex: none; }
+.agent .dot { width: 8px; height: 8px; border-radius: 4px; background: var(--green); flex: none; }
+.agent.busy .dot { background: #0A84FF; }
+.agent b { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.agent span { font-size: 12px; color: #AEAEB2; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plan { display: flex; align-items: center; gap: 10px; height: 16px; font-size: 11.5px; color: #AEAEB2; }
+.plan .n { width: 56px; }
+.plan .bar { flex: 1; height: 4px; border-radius: 2px; background: #FFFFFF22; overflow: hidden; }
+.plan .bar i { display: block; height: 100%; border-radius: 2px; }
+.plan .t { width: 140px; text-align: right; }
+
+/* chat */
+#chat { flex-direction: column; gap: 8px; }
+#chat-list { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+#chat-list > :first-child { margin-top: auto; }
+.greet { display: flex; flex-direction: column; align-items: center; gap: 8px; padding-bottom: 12px; }
+.greet svg { width: 28px; height: 28px; }
+.greet b { font-size: 18px; font-weight: 600; text-align: center; }
+.msg { max-width: 62%; border-radius: 12px; background: #1C1C20; padding: 8px 11px; font-size: 12.5px; white-space: pre-wrap; word-break: break-word; user-select: text; flex: none; }
+.msg.user { align-self: flex-end; background: var(--claude); }
+.msg:not(.user) { align-self: flex-start; }
+.thinking { color: var(--claude); font-size: 12px; }
+#chat-box { height: 44px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 14px; border-radius: 16px; background: #262422F2; border: 1px solid #FFFFFF1F; transition: border-color 150ms; }
+#chat-box:focus-within { border-color: #D9775799; }
+#chat-input { flex: 1; min-width: 0; height: 100%; background: none; border: 0; outline: none; color: #fff; font: 13px "Segoe UI", sans-serif; }
+#chat-trash, #chat-send { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex: none; }
+#chat-trash:hover { background: #FFFFFF1A; }
+#chat-trash img { width: 18px; height: 18px; opacity: .75; }
+#chat-send { background: #D9775755; cursor: default; transition: background 120ms; }
+#chat-send.can { background: var(--claude); cursor: pointer; }
+#chat-send.can:hover { background: #E5886A; }
+#chat-send img { width: 16px; height: 16px; }
+
+/* bolinhas e setas */
+#dots { height: 14px; flex: none; display: flex; justify-content: center; align-items: center; gap: 6px; }
+body.chat #dots { visibility: hidden; }
+#dots i { display: block; width: 6px; height: 6px; border-radius: 3px; background: #FFFFFF55; cursor: pointer; transition: width 200ms; }
+#dots i.on { width: 18px; background: #fff; }
+.arrow { position: absolute; top: calc(50% - 14px); width: 28px; height: 28px; border-radius: 14px; background: #FFFFFF18; display: none; }
+#arrow-l { left: 8px; } #arrow-r { right: 8px; }
+body.open:not(.chat) .arrow.can { display: block; }
+.arrow svg { width: 16px; height: 16px; margin: 6px; fill: none; stroke: url(#glass); stroke-width: 2px; stroke-linecap: round; display: block; }

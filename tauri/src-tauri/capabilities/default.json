@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "A tela do notch ouve os eventos do Rust (mouse em cima, bateria).",
-  "windows": ["notch"],
+  "description": "O notch e as configurações ouvem o estado do Rust (evento ui) e chamam os comandos ui_call/ui_set/ui_state.",
+  "windows": ["notch", "settings"],
   "permissions": ["core:default"]
 }

@@ -1,5 +1,5 @@
 [package]
-name = "orbi-tauri"
+name = "orbi"
 version = "3.1.0"
 edition = "2021"
 description = "Orbi: o notch do Windows (motor em Rust, tela em web pelo Tauri)"
